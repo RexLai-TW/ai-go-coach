@@ -211,6 +211,12 @@ export const GoBoard: React.FC<GoBoardProps> = ({
         ref={canvasRef}
         width={width}
         height={height}
+        style={{
+          width: `${width}px`,
+          height: `${height}px`,
+          display: 'block',
+          maxWidth: '100%',
+        }}
         className="border-2 border-gray-400 rounded-lg shadow-lg"
       />
 
