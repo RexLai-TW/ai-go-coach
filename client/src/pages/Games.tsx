@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useLocation } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Play, Trash2, Plus, Settings } from 'lucide-react';
+import { Upload, Play, Trash2, Plus, Settings, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 /**
@@ -16,6 +16,7 @@ export default function Games() {
   const [, setLocation] = useLocation();
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch games list
   const gamesQuery = trpc.games.list.useQuery({ limit: 50 });
@@ -80,6 +81,16 @@ export default function Games() {
     setLocation(`/review/${gameId}`);
   };
 
+  // Filter games based on search query
+  const filteredGames = gamesQuery.data?.games.filter(game => {
+    const query = searchQuery.toLowerCase();
+    return (
+      game.title?.toLowerCase().includes(query) ||
+      game.playerBlack?.toLowerCase().includes(query) ||
+      game.playerWhite?.toLowerCase().includes(query)
+    );
+  }) || [];
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
       <div className="max-w-6xl mx-auto">
@@ -102,6 +113,29 @@ export default function Games() {
             <Settings className="w-4 h-4" />
             設定
           </Button>
+        </div>
+
+        {/* Search bar */}
+        <div className="mb-6 flex items-center gap-2">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder="搜尋棋譜標題、棋手名稱..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSearchQuery('')}
+              className="text-gray-500"
+            >
+              清除
+            </Button>
+          )}
         </div>
 
         {/* Upload section */}
@@ -162,9 +196,9 @@ export default function Games() {
             <div className="flex justify-center py-12">
               <Spinner />
             </div>
-          ) : gamesQuery.data?.games && gamesQuery.data.games.length > 0 ? (
+          ) : filteredGames.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {gamesQuery.data.games.map((game) => (
+              {filteredGames.map((game) => (
                 <Card
                   key={game.id}
                   className="p-4 hover:shadow-lg transition-shadow"
@@ -223,6 +257,20 @@ export default function Games() {
                 </Card>
               ))}
             </div>
+          ) : searchQuery ? (
+            <Card className="p-12 text-center">
+              <div className="text-4xl mb-3">🔍</div>
+              <p className="text-gray-600 mb-4">
+                找不到符合 "{searchQuery}" 的棋譜
+              </p>
+              <Button
+                onClick={() => setSearchQuery('')}
+                variant="outline"
+                className="mt-4"
+              >
+                清除搜尋
+              </Button>
+            </Card>
           ) : (
             <Card className="p-12 text-center">
               <div className="text-4xl mb-3">📚</div>
