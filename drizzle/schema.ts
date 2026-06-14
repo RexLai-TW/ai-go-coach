@@ -79,3 +79,21 @@ export const chatSessions = mysqlTable("chat_sessions", {
 
 export type ChatSession = typeof chatSessions.$inferSelect;
 export type InsertChatSession = typeof chatSessions.$inferInsert;
+
+/**
+ * LLM 設定表：儲存使用者的自訂 OpenAI 相容 API 設定
+ */
+export const llmSettings = mysqlTable("llm_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull().unique(),
+  provider: varchar("provider", { length: 50 }).notNull(),
+  apiBaseUrl: varchar("apiBaseUrl", { length: 500 }),
+  apiKey: text("apiKey"),
+  modelName: varchar("modelName", { length: 255 }),
+  isEnabled: int("isEnabled").default(1).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type LlmSetting = typeof llmSettings.$inferSelect;
+export type InsertLlmSetting = typeof llmSettings.$inferInsert;

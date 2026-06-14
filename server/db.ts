@@ -1,6 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, games, reviews, chatSessions, Game, Review, ChatSession } from "../drizzle/schema";
+import { InsertUser, users, games, reviews, chatSessions, llmSettings, Game, Review, ChatSession, LlmSetting, InsertLlmSetting } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -288,6 +288,54 @@ export async function getChatMessages(sessionId: number) {
     content: msg.content,
     createdAt: msg.timestamp ? new Date(msg.timestamp) : new Date(),
   }));
+}
+
+/**
+ * LLM Settings queries
+ */
+export async function getLlmSettings(userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(llmSettings).where(
+    eq(llmSettings.userId, userId)
+  ).limit(1);
+
+  return result[0] ?? null;
+}
+
+export async function saveLlmSettings(userId: number, input: Partial<InsertLlmSetting>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existing = await getLlmSettings(userId);
+
+  if (existing) {
+    // Update existing settings
+    await db.update(llmSettings).set({
+      ...input,
+      updatedAt: new Date(),
+    }).where(eq(llmSettings.userId, userId));
+
+    return await getLlmSettings(userId);
+  } else {
+    // Create new settings
+    await db.insert(llmSettings).values({
+      userId,
+      ...input,
+    } as InsertLlmSetting);
+
+    return await getLlmSettings(userId);
+  }
+}
+
+export async function deleteLlmSettings(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(llmSettings).where(
+    eq(llmSettings.userId, userId)
+  );
 }
 
 export async function updateChatSession(gameId: number, userId: number, messages: any[]) {
