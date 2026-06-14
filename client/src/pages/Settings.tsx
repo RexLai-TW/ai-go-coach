@@ -1,4 +1,3 @@
-import React, { useState, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -6,15 +5,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { ArrowLeft, Save, Trash2, Check, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Check, AlertCircle, Settings as SettingsIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useLocation } from 'wouter';
+import { useState, useEffect } from 'react';
 
 /**
  * Settings page: Manage LLM configurations
  */
 export default function Settings() {
   const [, setLocation] = useLocation();
+  const [showSettings, setShowSettings] = useState(true);
   const [provider, setProvider] = useState('openai');
   const [apiBaseUrl, setApiBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -130,7 +131,20 @@ export default function Settings() {
           <h1 className="text-3xl font-bold text-gray-900">⚙️ 設定</h1>
         </div>
 
+        {/* Main Settings Button */}
+        <div className="mb-6">
+          <Button
+            onClick={() => setShowSettings(!showSettings)}
+            className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold py-3 rounded-lg shadow-lg hover:shadow-xl transition-all"
+            size="lg"
+          >
+            <SettingsIcon className="w-5 h-5 mr-2" />
+            {showSettings ? '隱藏設定' : '⚙️ 設定 AI 模型'}
+          </Button>
+        </div>
+
         {/* LLM Settings Card */}
+        {showSettings && (
         <Card className="p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">
             🤖 AI 模型設定
@@ -328,6 +342,7 @@ export default function Settings() {
             </div>
           )}
         </Card>
+        )}
       </div>
     </div>
   );
