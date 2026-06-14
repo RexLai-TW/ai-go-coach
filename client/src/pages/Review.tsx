@@ -164,11 +164,15 @@ export default function Review() {
           {/* Left: Board (2 columns) */}
           <div className="lg:col-span-2">
             <Card className="p-6 h-full">
-              <GoBoard
-                moves={game.moves}
-                currentMoveNumber={currentMove}
-                onMoveSelect={setSelectedMove}
-              />
+              <div className="overflow-x-auto flex justify-center">
+                <GoBoard
+                  moves={game.moves}
+                  currentMoveNumber={currentMove}
+                  onMoveSelect={setSelectedMove}
+                  width={700}
+                  height={700}
+                />
+              </div>
             </Card>
           </div>
 

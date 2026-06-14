@@ -25,14 +25,14 @@ export const GoBoard: React.FC<GoBoardProps> = ({
   moves,
   currentMoveNumber = 0,
   onMoveSelect,
-  width = 600,
-  height = 600,
+  width = 700,
+  height = 700,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [displayMove, setDisplayMove] = useState(currentMoveNumber);
 
   const BOARD_SIZE = 19;
-  const MARGIN = 40;
+  const MARGIN = 50;
   const CELL_SIZE = (width - 2 * MARGIN) / (BOARD_SIZE - 1);
 
   // Coordinate conversion: "P16" -> [15, 3]
@@ -121,7 +121,7 @@ export const GoBoard: React.FC<GoBoardProps> = ({
 
     // Draw coordinates
     ctx.fillStyle = '#000';
-    ctx.font = '12px Arial';
+    ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
