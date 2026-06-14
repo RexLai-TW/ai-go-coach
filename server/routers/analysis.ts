@@ -131,6 +131,27 @@ Format your response as JSON:
     }),
 
   /**
+   * Get full game analysis progress
+   */
+  getFullGameProgress: protectedProcedure
+    .input(z.object({ gameId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const reviews = await getGameReviews(input.gameId, ctx.user!.id);
+      const game = await getGameById(input.gameId, ctx.user!.id);
+      if (!game) {
+        throw new Error('Game not found');
+      }
+      const parsed = parseSGF(game.sgfContent);
+      if (!parsed) {
+        throw new Error('Failed to parse game');
+      }
+      return {
+        analyzed: reviews.length,
+        total: parsed.totalMoves,
+      };
+    }),
+
+  /**
    * Analyze full game (all moves)
    */
   analyzeFullGame: protectedProcedure
@@ -242,7 +263,7 @@ Format your response as JSON:
       return {
         totalMoves: parsed.totalMoves,
         analyzedMoves: results.length,
-        results,
+        results: results.slice(0, 10),
       };
     }),
 

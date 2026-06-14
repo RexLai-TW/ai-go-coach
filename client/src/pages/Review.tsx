@@ -19,6 +19,7 @@ export default function Review() {
   const [currentMove, setCurrentMove] = useState(0);
   const [selectedMove, setSelectedMove] = useState(0);
   const [boardSize, setBoardSize] = useState(700);
+  const [fullGameProgress, setFullGameProgress] = useState<{ current: number; total: number } | null>(null);
 
   // Calculate responsive board size
   useEffect(() => {
@@ -51,6 +52,12 @@ export default function Review() {
   const reviewQuery = trpc.analysis.getReview.useQuery(
     { gameId: gameId!, moveNumber: selectedMove },
     { enabled: !!gameId && selectedMove > 0 }
+  );
+
+  // Fetch all reviews for the game
+  const allReviewsQuery = trpc.analysis.getGameReviews.useQuery(
+    { gameId: gameId! },
+    { enabled: !!gameId }
   );
 
   // Chat Review queries and mutations
@@ -87,12 +94,16 @@ export default function Review() {
     if (!gameId) return;
 
     try {
+      setFullGameProgress({ current: 0, total: game?.totalMoves || 0 });
       await analyzeFullGameMutation.mutateAsync({ gameId });
 
-      // Refetch reviews
-      await reviewQuery.refetch();
+      // Refetch all reviews to get the full game results
+      const utils = trpc.useUtils();
+      await utils.analysis.getGameReviews.invalidate({ gameId });
+      setFullGameProgress(null);
     } catch (error) {
       console.error('Error analyzing game:', error);
+      setFullGameProgress(null);
     }
   };
 
@@ -173,11 +184,11 @@ export default function Review() {
 
           <Button
             onClick={handleAnalyzeFullGame}
-            disabled={analyzeFullGameMutation.isPending}
+            disabled={analyzeFullGameMutation.isPending || fullGameProgress !== null}
             className="gap-2"
           >
             <Zap className="w-4 h-4" />
-            {analyzeFullGameMutation.isPending ? '分析中...' : '全局複盤'}
+            {fullGameProgress ? `分析中 ${fullGameProgress.current}/${fullGameProgress.total}` : '全局複盤'}
           </Button>
         </div>
 
@@ -197,6 +208,56 @@ export default function Review() {
                 />
               </div>
             </Card>
+
+            {/* Full Game Review Progress */}
+            {fullGameProgress && (
+              <Card className="p-4 bg-blue-50 border border-blue-200">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-blue-900">全局複盤進度</h3>
+                    <span className="text-sm text-blue-700">
+                      {fullGameProgress.current} / {fullGameProgress.total}
+                    </span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${fullGameProgress.total > 0 ? (fullGameProgress.current / fullGameProgress.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="text-xs text-blue-700">正在分析棋局中...</p>
+                </div>
+              </Card>
+            )}
+
+            {/* Full Game Review Results Summary */}
+            {allReviewsQuery.data && allReviewsQuery.data.length > 0 && !fullGameProgress && (
+              <Card className="p-4 bg-green-50 border border-green-200">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-green-900">複盤統計</h3>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-green-600 font-semibold">{allReviewsQuery.data.length}</p>
+                      <p className="text-green-700">已分析手數</p>
+                    </div>
+                    <div>
+                      <p className="text-green-600 font-semibold">
+                        {allReviewsQuery.data.filter(r => r.evaluation === 'good' || r.evaluation === 'excellent').length}
+                      </p>
+                      <p className="text-green-700">優秀走法</p>
+                    </div>
+                    <div>
+                      <p className="text-red-600 font-semibold">
+                        {allReviewsQuery.data.filter(r => r.evaluation === 'bad' || r.evaluation === 'blunder').length}
+                      </p>
+                      <p className="text-red-700">失誤走法</p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            )}
 
             {/* AI Review Panel */}
             <div>
