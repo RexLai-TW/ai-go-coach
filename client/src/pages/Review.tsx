@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useRoute } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { GoBoard } from '@/components/GoBoard';
@@ -18,6 +18,28 @@ export default function Review() {
 
   const [currentMove, setCurrentMove] = useState(0);
   const [selectedMove, setSelectedMove] = useState(0);
+  const [boardSize, setBoardSize] = useState(700);
+
+  // Calculate responsive board size
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      if (width < 768) {
+        // Mobile: use most of the width minus padding
+        setBoardSize(Math.min(500, width - 40));
+      } else if (width < 1024) {
+        // Tablet: medium size
+        setBoardSize(550);
+      } else {
+        // Desktop: full size
+        setBoardSize(700);
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Fetch game data
   const gameQuery = trpc.games.get.useQuery(
@@ -169,8 +191,8 @@ export default function Review() {
                   moves={game.moves}
                   currentMoveNumber={currentMove}
                   onMoveSelect={setSelectedMove}
-                  width={700}
-                  height={700}
+                  width={boardSize}
+                  height={boardSize}
                 />
               </div>
             </Card>
