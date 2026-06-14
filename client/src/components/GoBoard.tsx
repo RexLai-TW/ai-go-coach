@@ -227,6 +227,38 @@ export const GoBoard: React.FC<GoBoardProps> = ({
     onMoveSelect?.(moves.length);
   };
 
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle if not in an input field
+      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
+        return;
+      }
+
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          handlePrevMove();
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          handleNextMove();
+          break;
+        case 'Home':
+          e.preventDefault();
+          handleFirstMove();
+          break;
+        case 'End':
+          e.preventDefault();
+          handleLastMove();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [displayMove, moves.length]);
+
   return (
     <div className="flex flex-col items-center gap-4">
       <canvas
@@ -261,8 +293,9 @@ export const GoBoard: React.FC<GoBoardProps> = ({
           <ChevronLeft className="w-4 h-4" />
         </Button>
 
-        <span className="text-sm font-medium px-4">
+        <span className="text-sm font-medium px-4 text-gray-600">
           Move {displayMove} / {moves.length}
+          <span className="text-xs text-gray-500 ml-2">(← → 上下鍵 | Home/End 首尾)</span>
         </span>
 
         <Button
