@@ -71,15 +71,15 @@ export const AIReviewPanel: React.FC<AIReviewPanelProps> = ({
 
   const getEvaluationLabel = (evaluation: string | null) => {
     const labels: Record<string, string> = {
-      good: '好手',
-      bad: '壞手',
-      unclear: '不明確',
-      blunder: '大失誤',
-      mistake: '失誤',
-      questionable: '可疑',
-      excellent: '優秀',
+      good: 'Good',
+      bad: 'Bad',
+      unclear: 'Unclear',
+      blunder: 'Blunder',
+      mistake: 'Mistake',
+      questionable: 'Questionable',
+      excellent: 'Excellent',
     };
-    return (evaluation && labels[evaluation]) || evaluation || '未知';
+    return (evaluation && labels[evaluation]) || evaluation || 'Unknown';
   };
 
   return (
@@ -118,7 +118,7 @@ export const AIReviewPanel: React.FC<AIReviewPanelProps> = ({
 
             {/* Reason */}
             <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-gray-700">原因</h3>
+              <h3 className="text-sm font-semibold text-gray-700">分析</h3>
               <p className="text-sm text-gray-600 leading-relaxed">
                 {review.reason}
               </p>

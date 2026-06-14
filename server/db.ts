@@ -221,13 +221,13 @@ export async function getGameReviews(gameId: number, userId: number) {
 /**
  * Chat sessions queries
  */
-export async function createChatSession(gameId: number, userId: number) {
+export async function createChatSession(input: { gameId: number; userId: number }) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
   const result = await db.insert(chatSessions).values({
-    gameId,
-    userId,
+    gameId: input.gameId,
+    userId: input.userId,
     messages: [],
   });
 
@@ -246,6 +246,48 @@ export async function getChatSession(gameId: number, userId: number) {
   ).limit(1);
 
   return result[0] ?? null;
+}
+
+export async function addChatMessage(sessionId: number, role: 'user' | 'assistant', content: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const session = await db.select().from(chatSessions).where(
+    eq(chatSessions.id, sessionId)
+  ).limit(1);
+
+  if (!session[0]) throw new Error("Session not found");
+
+  const currentMessages = session[0].messages as any;
+  const messages = (Array.isArray(currentMessages) ? currentMessages : []) as any[];
+  messages.push({
+    role,
+    content,
+    timestamp: new Date().toISOString(),
+  });
+
+  await db.update(chatSessions).set({
+    messages: messages as any,
+  }).where(eq(chatSessions.id, sessionId));
+}
+
+export async function getChatMessages(sessionId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const result = await db.select().from(chatSessions).where(
+    eq(chatSessions.id, sessionId)
+  ).limit(1);
+
+  if (!result[0]) return [];
+
+  const currentMessages = result[0].messages as any;
+  const messages = (Array.isArray(currentMessages) ? currentMessages : []) as any[];
+  return messages.map((msg: any) => ({
+    role: msg.role,
+    content: msg.content,
+    createdAt: msg.timestamp ? new Date(msg.timestamp) : new Date(),
+  }));
 }
 
 export async function updateChatSession(gameId: number, userId: number, messages: any[]) {

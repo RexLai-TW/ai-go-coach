@@ -3,13 +3,14 @@ import { useRoute } from 'wouter';
 import { trpc } from '@/lib/trpc';
 import { GoBoard } from '@/components/GoBoard';
 import { AIReviewPanel } from '@/components/AIReviewPanel';
+import { ChatReviewBox } from '@/components/ChatReviewBox';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { ArrowLeft, Zap } from 'lucide-react';
 
 /**
- * Review page: Display game and AI analysis
+ * Review page: Display game and AI analysis with chat
  */
 export default function Review() {
   const [, params] = useRoute('/review/:gameId');
@@ -29,6 +30,14 @@ export default function Review() {
     { gameId: gameId!, moveNumber: selectedMove },
     { enabled: !!gameId && selectedMove > 0 }
   );
+
+  // Chat Review queries and mutations
+  const chatHistoryQuery = trpc.chatReview.getHistory.useQuery(
+    { gameId: gameId! },
+    { enabled: !!gameId }
+  );
+  const sendMessageMutation = trpc.chatReview.sendMessage.useMutation();
+  const clearHistoryMutation = trpc.chatReview.clearHistory.useMutation();
 
   // Analyze move mutation
   const analyzeMutation = trpc.analysis.analyzeMove.useMutation();
@@ -62,6 +71,34 @@ export default function Review() {
       await reviewQuery.refetch();
     } catch (error) {
       console.error('Error analyzing game:', error);
+    }
+  };
+
+  const handleSendMessage = async (message: string) => {
+    if (!gameId) return;
+
+    try {
+      await sendMessageMutation.mutateAsync({
+        gameId,
+        moveNumber: selectedMove,
+        message,
+      });
+
+      // Refetch chat history
+      await chatHistoryQuery.refetch();
+    } catch (error) {
+      console.error('Error sending message:', error);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!gameId) return;
+
+    try {
+      await clearHistoryMutation.mutateAsync({ gameId });
+      await chatHistoryQuery.refetch();
+    } catch (error) {
+      console.error('Error clearing history:', error);
     }
   };
 
@@ -122,11 +159,11 @@ export default function Review() {
           </Button>
         </div>
 
-        {/* Main content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Board */}
+        {/* Main content - Three column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
+          {/* Left: Board (2 columns) */}
           <div className="lg:col-span-2">
-            <Card className="p-6">
+            <Card className="p-6 h-full">
               <GoBoard
                 moves={game.moves}
                 currentMoveNumber={currentMove}
@@ -135,7 +172,7 @@ export default function Review() {
             </Card>
           </div>
 
-          {/* Right: AI Review Panel */}
+          {/* Middle: AI Review Panel (1 column) */}
           <div className="lg:col-span-1">
             <AIReviewPanel
               review={reviewQuery.data}
@@ -145,10 +182,22 @@ export default function Review() {
               totalMoves={game.totalMoves}
             />
           </div>
+
+          {/* Right: Chat Review (1 column) */}
+          <div className="lg:col-span-1">
+            <ChatReviewBox
+              messages={chatHistoryQuery.data?.messages || []}
+              isLoading={sendMessageMutation.isPending}
+              onSendMessage={handleSendMessage}
+              onClearHistory={handleClearHistory}
+              moveNumber={selectedMove}
+              totalMoves={game.totalMoves}
+            />
+          </div>
         </div>
 
         {/* Game info */}
-        <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="p-4">
             <p className="text-xs text-gray-500 uppercase">黑方</p>
             <p className="text-lg font-semibold text-gray-900">
