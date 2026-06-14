@@ -259,10 +259,40 @@ export const GoBoard: React.FC<GoBoardProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [displayMove, moves.length]);
 
+  // Canvas click handler for move navigation
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Calculate which intersection was clicked
+    const clickCol = Math.round((x - MARGIN) / CELL_SIZE);
+    const clickRow = Math.round((y - MARGIN) / CELL_SIZE);
+
+    // Check if click is within board bounds
+    if (clickCol >= 0 && clickCol < BOARD_SIZE && clickRow >= 0 && clickRow < BOARD_SIZE) {
+      // Find the move at this position
+      for (let i = 0; i < Math.min(displayMove, moves.length); i++) {
+        const move = moves[i];
+        const indices = coordinateToIndices(move.coordinate);
+        if (indices && indices[0] === clickRow && indices[1] === clickCol) {
+          // Found a stone at this position, navigate to this move
+          setDisplayMove(i + 1);
+          onMoveSelect?.(i + 1);
+          return;
+        }
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col items-center gap-4">
       <canvas
         ref={canvasRef}
+        onClick={handleCanvasClick}
         style={{
           width: `${width}px`,
           height: `${height}px`,
@@ -271,6 +301,7 @@ export const GoBoard: React.FC<GoBoardProps> = ({
           border: '2px solid #9ca3af',
           borderRadius: '0.5rem',
           boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+          cursor: 'pointer',
         }}
       />
 
@@ -317,25 +348,28 @@ export const GoBoard: React.FC<GoBoardProps> = ({
       </div>
 
       {/* Move history */}
-      <div className="w-full max-h-40 overflow-y-auto border rounded p-3 bg-gray-50">
-        <div className="grid grid-cols-10 gap-1">
-          {moves.map((move, idx) => (
-            <button
-              key={idx}
-              onClick={() => {
-                setDisplayMove(idx + 1);
-                onMoveSelect?.(idx + 1);
-              }}
-              className={`p-1 text-xs rounded text-center cursor-pointer transition-colors ${
-                displayMove === idx + 1
-                  ? 'bg-blue-500 text-white font-bold'
-                  : 'bg-gray-200 hover:bg-gray-300'
-              }`}
-              title={`${move.player === 'black' ? '黑' : '白'} ${move.coordinate}`}
-            >
-              {idx + 1}
-            </button>
-          ))}
+      <div className="w-full">
+        <p className="text-xs text-gray-600 mb-2 font-medium">落子序列 (點擊或按數字鍵跳轉)</p>
+        <div className="max-h-40 overflow-y-auto border rounded p-3 bg-gray-50">
+          <div className="grid grid-cols-10 gap-1">
+            {moves.map((move, idx) => (
+              <button
+                key={idx}
+                onClick={() => {
+                  setDisplayMove(idx + 1);
+                  onMoveSelect?.(idx + 1);
+                }}
+                className={`p-1 text-xs rounded text-center cursor-pointer transition-colors ${
+                  displayMove === idx + 1
+                    ? 'bg-blue-500 text-white font-bold'
+                    : 'bg-gray-200 hover:bg-gray-300'
+                }`}
+                title={`${move.player === 'black' ? '黑' : '白'} ${move.coordinate}`}
+              >
+                {idx + 1}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
