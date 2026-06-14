@@ -32,7 +32,8 @@ export const GoBoard: React.FC<GoBoardProps> = ({
   const [displayMove, setDisplayMove] = useState(currentMoveNumber);
 
   const BOARD_SIZE = 19;
-  const MARGIN = 50;
+  // Responsive margin based on board size
+  const MARGIN = Math.max(30, Math.min(50, width * 0.07));
   const CELL_SIZE = (width - 2 * MARGIN) / (BOARD_SIZE - 1);
 
   // Coordinate conversion: "P16" -> [15, 3]
@@ -73,7 +74,8 @@ export const GoBoard: React.FC<GoBoardProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear canvas
+    // Clear canvas with proper dimensions
+    ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = '#DEB887';
     ctx.fillRect(0, 0, width, height);
 
@@ -165,18 +167,16 @@ export const GoBoard: React.FC<GoBoardProps> = ({
         ctx.fill();
         ctx.stroke();
 
-        // Move number for all stones
-        // Find which move this stone belongs to
-        for (let moveIdx = 0; moveIdx < Math.min(displayMove, moves.length); moveIdx++) {
-          const move = moves[moveIdx];
-          const moveIndices = coordinateToIndices(move.coordinate);
-          if (moveIndices && moveIndices[0] === row && moveIndices[1] === col) {
-            ctx.fillStyle = cell === 1 ? '#fff' : '#000';
-            ctx.font = 'bold 12px Arial';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(String(moveIdx + 1), x, y);
-            break;
+        // Highlight last move with red circle
+        if (displayMove > 0 && displayMove <= moves.length) {
+          const lastMove = moves[displayMove - 1];
+          const lastMoveIndices = coordinateToIndices(lastMove.coordinate);
+          if (lastMoveIndices && lastMoveIndices[0] === row && lastMoveIndices[1] === col) {
+            ctx.strokeStyle = '#ff0000';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(x, y, CELL_SIZE / 2 + 2, 0, Math.PI * 2);
+            ctx.stroke();
           }
         }
       }
