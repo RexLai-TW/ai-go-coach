@@ -181,11 +181,12 @@ export default function Review() {
           </Button>
         </div>
 
-        {/* Main content - Three column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-6">
-          {/* Left: Board (2 columns) */}
-          <div className="lg:col-span-2">
-            <Card className="p-6 h-full">
+        {/* Main content - Two column layout (8:2) */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+          {/* Left: Board + AI Review Panel (4 columns = 80%) */}
+          <div className="lg:col-span-4 flex flex-col gap-6">
+            {/* Board */}
+            <Card className="p-6">
               <div className="overflow-x-auto flex justify-center">
                 <GoBoard
                   moves={game.moves}
@@ -196,29 +197,31 @@ export default function Review() {
                 />
               </div>
             </Card>
+
+            {/* AI Review Panel */}
+            <div>
+              <AIReviewPanel
+                review={reviewQuery.data}
+                isLoading={reviewQuery.isLoading || analyzeMutation.isPending}
+                onAnalyze={handleAnalyzeMove}
+                moveNumber={selectedMove}
+                totalMoves={game.totalMoves}
+              />
+            </div>
           </div>
 
-          {/* Middle: AI Review Panel (1 column) */}
+          {/* Right: Chat Review (1 column = 20%) */}
           <div className="lg:col-span-1">
-            <AIReviewPanel
-              review={reviewQuery.data}
-              isLoading={reviewQuery.isLoading || analyzeMutation.isPending}
-              onAnalyze={handleAnalyzeMove}
-              moveNumber={selectedMove}
-              totalMoves={game.totalMoves}
-            />
-          </div>
-
-          {/* Right: Chat Review (1 column) */}
-          <div className="lg:col-span-1">
-            <ChatReviewBox
-              messages={chatHistoryQuery.data?.messages || []}
-              isLoading={sendMessageMutation.isPending}
-              onSendMessage={handleSendMessage}
-              onClearHistory={handleClearHistory}
-              moveNumber={selectedMove}
-              totalMoves={game.totalMoves}
-            />
+            <Card className="p-4 h-full flex flex-col">
+              <ChatReviewBox
+                messages={chatHistoryQuery.data?.messages || []}
+                isLoading={sendMessageMutation.isPending}
+                onSendMessage={handleSendMessage}
+                onClearHistory={handleClearHistory}
+                moveNumber={selectedMove}
+                totalMoves={game.totalMoves}
+              />
+            </Card>
           </div>
         </div>
 
