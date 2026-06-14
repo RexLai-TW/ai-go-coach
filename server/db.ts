@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { InsertUser, users, games, reviews, chatSessions, Game, Review, ChatSession } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,177 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function getUserById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  return result[0] ?? null;
+}
+
+/**
+ * Games queries
+ */
+export async function createGame(userId: number, input: {
+  title?: string;
+  description?: string;
+  sgfContent: string;
+  playerBlack?: string;
+  playerWhite?: string;
+  result?: string;
+  komi?: string;
+  handicap?: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(games).values({
+    userId,
+    title: input.title,
+    description: input.description,
+    sgfContent: input.sgfContent,
+    playerBlack: input.playerBlack,
+    playerWhite: input.playerWhite,
+    result: input.result,
+    komi: input.komi,
+    handicap: input.handicap ?? 0,
+  });
+
+  return result[0]?.insertId;
+}
+
+export async function getUserGames(userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(games).where(
+    eq(games.userId, userId)
+  ).orderBy(desc(games.uploadedAt));
+}
+
+export async function getGameById(gameId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(games).where(
+    and(
+      eq(games.id, gameId),
+      eq(games.userId, userId)
+    )
+  ).limit(1);
+
+  return result[0] ?? null;
+}
+
+export async function deleteGame(gameId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return false;
+
+  await db.delete(games).where(
+    and(
+      eq(games.id, gameId),
+      eq(games.userId, userId)
+    )
+  );
+
+  return true;
+}
+
+/**
+ * Reviews queries
+ */
+export async function createReview(input: {
+  gameId: number;
+  userId: number;
+  moveNumber: number;
+  evaluation?: string;
+  reason?: string;
+  suggestedMoves?: any;
+  strategy?: string;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.insert(reviews).values({
+    gameId: input.gameId,
+    userId: input.userId,
+    moveNumber: input.moveNumber,
+    evaluation: input.evaluation,
+    reason: input.reason,
+    suggestedMoves: input.suggestedMoves,
+    strategy: input.strategy,
+  });
+}
+
+export async function getReview(gameId: number, moveNumber: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(reviews).where(
+    and(
+      eq(reviews.gameId, gameId),
+      eq(reviews.moveNumber, moveNumber),
+      eq(reviews.userId, userId)
+    )
+  ).limit(1);
+
+  return result[0] ?? null;
+}
+
+export async function getGameReviews(gameId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return await db.select().from(reviews).where(
+    and(
+      eq(reviews.gameId, gameId),
+      eq(reviews.userId, userId)
+    )
+  ).orderBy(asc(reviews.moveNumber));
+}
+
+/**
+ * Chat sessions queries
+ */
+export async function createChatSession(gameId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(chatSessions).values({
+    gameId,
+    userId,
+    messages: [],
+  });
+
+  return result[0]?.insertId;
+}
+
+export async function getChatSession(gameId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(chatSessions).where(
+    and(
+      eq(chatSessions.gameId, gameId),
+      eq(chatSessions.userId, userId)
+    )
+  ).limit(1);
+
+  return result[0] ?? null;
+}
+
+export async function updateChatSession(gameId: number, userId: number, messages: any[]) {
+  const db = await getDb();
+  if (!db) return false;
+
+  await db.update(chatSessions).set({
+    messages,
+  }).where(
+    and(
+      eq(chatSessions.gameId, gameId),
+      eq(chatSessions.userId, userId)
+    )
+  );
+
+  return true;
+}
