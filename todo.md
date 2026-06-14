@@ -37,10 +37,10 @@
 
 ### 後端 API 基礎
 
-- [ ] 建立 `games` 路由（upload, list, get, delete）
-- [ ] 建立 `analysis` 路由框架
+- [x] 建立 `games` 路由（upload, list, get, delete）
+- [x] 建立 `analysis` 路由框架
 - [ ] 建立 `chatReview` 路由框架
-- [ ] 實作上傳棋譜驗證邏輯
+- [x] 實作上傳棋譜驗證邏輯
 - [ ] 編寫 API 單元測試
 
 ---
@@ -49,11 +49,11 @@
 
 ### AI 分析後端
 
-- [ ] 設定 LLM API 連接（DeepSeek / OpenAI）
-- [ ] 實作 `analysis.analyzeMove` 程序
-- [ ] 實作 `analysis.analyzeFullGame` 程序
-- [ ] 實作 `analysis.getReview` 程序
-- [ ] 編寫 Prompt 模板（Move Analysis, Full Game Review）
+- [x] 設定 LLM API 連接（DeepSeek / OpenAI）
+- [x] 實作 `analysis.analyzeMove` 程序
+- [x] 實作 `analysis.analyzeFullGame` 程序
+- [x] 實作 `analysis.getReview` 程序
+- [x] 編寫 Prompt 模板（Move Analysis, Full Game Review）
 - [ ] 實作複盤結果快取機制
 - [ ] 編寫 AI 分析測試用例
 
@@ -69,12 +69,12 @@
 
 ### 前端 AI Review Panel
 
-- [ ] 設計 AI Review Panel 元件結構
-- [ ] 實作評估標籤顯示（good/bad/unclear/blunder/mistake/questionable）
+- [x] 設計 AI Review Panel 元件結構
+- [x] 實作評估標籤顯示（good/bad/unclear/blunder/mistake/questionable）
 - [ ] 實作原因文字渲染（Markdown 支援）
-- [ ] 實作替代走法建議卡片
-- [ ] 實作戰略方向描述區塊
-- [ ] 實作「分析此手」按鈕與載入狀態
+- [x] 實作替代走法建議卡片
+- [x] 實作戰略方向描述區塊
+- [x] 實作「分析此手」按鈕與載入狀態
 - [ ] 編寫 AI Review Panel 測試
 
 ### 前端 Chat Review 對話框
@@ -93,10 +93,10 @@
 
 ### 複盤頁面整合
 
-- [ ] 建立複盤頁面骨架 (`/review/:gameId`)
+- [x] 建立複盤頁面骨架 (`/review/:gameId`)
 - [ ] 整合棋盤、AI Review Panel、Chat Review
-- [ ] 實作頁面佈局（左側棋盤、中央分析、右側對話）
-- [ ] 實作狀態管理（當前手數、棋盤狀態同步）
+- [x] 實作頁面佈局（左側棋盤、中央分析、右側對話）
+- [x] 實作狀態管理（當前手數、棋盤狀態同步）
 - [ ] 實作鍵盤快捷鍵（上一手、下一手、首手、末手）
 - [ ] 編寫複盤頁面整合測試
 
