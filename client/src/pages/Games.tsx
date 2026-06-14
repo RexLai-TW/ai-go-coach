@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Play, Trash2, Plus } from 'lucide-react';
+import { Upload, Play, Trash2, Plus, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 
 /**
@@ -84,13 +84,24 @@ export default function Games() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            🎯 我的棋譜庫
-          </h1>
-          <p className="text-gray-600">
-            上傳 SGF 棋譜，使用 AI 教練進行複盤分析
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+              🎯 我的棋譜庫
+            </h1>
+            <p className="text-gray-600">
+              上傳 SGF 棋譜，使用 AI 教練進行複盤分析
+            </p>
+          </div>
+          <Button
+            onClick={() => setLocation('/settings')}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            設定
+          </Button>
         </div>
 
         {/* Upload section */}
