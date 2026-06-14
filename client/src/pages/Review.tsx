@@ -182,9 +182,9 @@ export default function Review() {
         </div>
 
         {/* Main content - Two column layout (8:2) */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
-          {/* Left: Board + AI Review Panel (4 columns = 80%) */}
-          <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 mb-6">
+          {/* Left: Board + AI Review Panel (8 columns = 80%) */}
+          <div className="lg:col-span-8 flex flex-col gap-6">
             {/* Board */}
             <Card className="p-6">
               <div className="overflow-x-auto flex justify-center">
@@ -210,8 +210,8 @@ export default function Review() {
             </div>
           </div>
 
-          {/* Right: Chat Review (1 column = 20%) */}
-          <div className="lg:col-span-1">
+          {/* Right: Chat Review (2 columns = 20%) */}
+          <div className="lg:col-span-2">
             <Card className="p-4 h-full flex flex-col">
               <ChatReviewBox
                 messages={chatHistoryQuery.data?.messages || []}
