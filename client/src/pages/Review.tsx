@@ -205,6 +205,7 @@ export default function Review() {
                   onMoveSelect={setSelectedMove}
                   width={boardSize}
                   height={boardSize}
+                  analyzedMoves={allReviewsQuery.data?.map(r => r.moveNumber) || []}
                 />
               </div>
             </Card>

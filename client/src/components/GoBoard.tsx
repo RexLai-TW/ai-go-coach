@@ -15,6 +15,7 @@ interface GoBoardProps {
   onMoveSelect?: (moveNumber: number) => void;
   width?: number;
   height?: number;
+  analyzedMoves?: number[];
 }
 
 /**
@@ -27,6 +28,7 @@ export const GoBoard: React.FC<GoBoardProps> = ({
   onMoveSelect,
   width = 700,
   height = 700,
+  analyzedMoves = [],
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [displayMove, setDisplayMove] = useState(currentMoveNumber);
@@ -185,9 +187,23 @@ export const GoBoard: React.FC<GoBoardProps> = ({
             ctx.stroke();
           }
         }
+
+        // Mark analyzed moves with a small indicator
+        for (let i = 0; i < moves.length; i++) {
+          if (analyzedMoves.includes(i + 1)) {
+            const moveIndices = coordinateToIndices(moves[i].coordinate);
+            if (moveIndices && moveIndices[0] === row && moveIndices[1] === col) {
+              ctx.fillStyle = '#22c55e';
+              ctx.beginPath();
+              ctx.arc(x + CELL_SIZE / 2 - 4, y - CELL_SIZE / 2 + 4, 4, 0, Math.PI * 2);
+              ctx.fill();
+              break;
+            }
+          }
+        }
       }
     }
-  }, [displayMove, moves, width, height]);
+  }, [displayMove, moves, width, height, analyzedMoves]);
 
   const handlePrevMove = () => {
     const newMove = Math.max(0, displayMove - 1);
