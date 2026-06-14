@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, SkipBack, SkipForward } from 'lucide-react';
 
@@ -36,10 +36,10 @@ export const GoBoard: React.FC<GoBoardProps> = ({
   const MARGIN = Math.max(30, Math.min(50, width * 0.07));
   const CELL_SIZE = (width - 2 * MARGIN) / (BOARD_SIZE - 1);
 
-  // Coordinate conversion: "P16" -> [15, 3]
+  // Coordinate conversion: "P16" -> [15, 3], "A10" -> [9, 0]
   const coordinateToIndices = (coord: string): [number, number] | null => {
     if (coord === 'pass') return null;
-    if (coord.length !== 2) return null;
+    if (coord.length < 2) return null;
 
     const col = coord.charCodeAt(0) - 'A'.charCodeAt(0);
     const row = 19 - parseInt(coord.slice(1), 10);

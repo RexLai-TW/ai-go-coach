@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { protectedProcedure, router } from '../_core/trpc';
-import { createChatSession, getChatSession, addChatMessage, getChatMessages, getGameById } from '../db';
+import { createChatSession, getChatSession, addChatMessage, getChatMessages, getGameById, updateChatSession } from '../db';
 import { parseSGF, getBoardStateAfterMove, getGamePhase } from '../services/sgf-parser';
 import { invokeLLM } from '../_core/llm';
 
@@ -167,8 +167,8 @@ ${input.message}`;
         return { success: true };
       }
 
-      // Delete all messages in session (in production, consider soft delete)
-      // For now, we'll just return success - actual deletion would require a DB helper
+      // Clear all messages by updating with empty array
+      await updateChatSession(input.gameId, ctx.user!.id, []);
       return { success: true };
     }),
 });
