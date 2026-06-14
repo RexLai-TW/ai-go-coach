@@ -165,16 +165,18 @@ export const GoBoard: React.FC<GoBoardProps> = ({
         ctx.fill();
         ctx.stroke();
 
-        // Move number (last move)
-        if (displayMove > 0 && displayMove === moves.length) {
-          const lastMove = moves[displayMove - 1];
-          const lastIndices = coordinateToIndices(lastMove.coordinate);
-          if (lastIndices && lastIndices[0] === row && lastIndices[1] === col) {
+        // Move number for all stones
+        // Find which move this stone belongs to
+        for (let moveIdx = 0; moveIdx < Math.min(displayMove, moves.length); moveIdx++) {
+          const move = moves[moveIdx];
+          const moveIndices = coordinateToIndices(move.coordinate);
+          if (moveIndices && moveIndices[0] === row && moveIndices[1] === col) {
             ctx.fillStyle = cell === 1 ? '#fff' : '#000';
-            ctx.font = 'bold 10px Arial';
+            ctx.font = 'bold 12px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText(String(displayMove), x, y);
+            ctx.fillText(String(moveIdx + 1), x, y);
+            break;
           }
         }
       }
