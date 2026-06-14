@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -47,6 +47,12 @@ export const ChatReviewBox: React.FC<ChatReviewBoxProps> = ({
 
     onSendMessage?.(inputValue);
     setInputValue('');
+  };
+
+  const handleClear = () => {
+    if (window.confirm('確定要清除所有對話嗎？')) {
+      onClearHistory?.();
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -98,9 +104,13 @@ export const ChatReviewBox: React.FC<ChatReviewBoxProps> = ({
                         : 'bg-gray-100 text-gray-900 rounded-bl-none'
                     }`}
                   >
-                    <p className="text-sm leading-relaxed break-words">
-                      {msg.content}
-                    </p>
+                    <div className="text-sm leading-relaxed break-words whitespace-pre-wrap space-y-2">
+                      {msg.content.split('\n').map((line, i) => (
+                        <p key={i} className="m-0">
+                          {line}
+                        </p>
+                      ))}
+                    </div>
                     {msg.timestamp && (
                       <p className="text-xs mt-1 opacity-70">
                         {msg.timestamp.toLocaleTimeString()}
@@ -145,7 +155,7 @@ export const ChatReviewBox: React.FC<ChatReviewBoxProps> = ({
 
           {onClearHistory && (
             <Button
-              onClick={onClearHistory}
+              onClick={handleClear}
               variant="outline"
               size="sm"
               className="w-full gap-2 text-xs"

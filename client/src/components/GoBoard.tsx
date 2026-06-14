@@ -74,6 +74,12 @@ export const GoBoard: React.FC<GoBoardProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // Set canvas resolution to match display size (fix for high-DPI displays)
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    ctx.scale(dpr, dpr);
+
     // Clear canvas with proper dimensions
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = '#DEB887';
@@ -209,15 +215,15 @@ export const GoBoard: React.FC<GoBoardProps> = ({
     <div className="flex flex-col items-center gap-4">
       <canvas
         ref={canvasRef}
-        width={width}
-        height={height}
         style={{
           width: `${width}px`,
           height: `${height}px`,
           display: 'block',
           maxWidth: '100%',
+          border: '2px solid #9ca3af',
+          borderRadius: '0.5rem',
+          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
         }}
-        className="border-2 border-gray-400 rounded-lg shadow-lg"
       />
 
       {/* Navigation controls */}
