@@ -6,17 +6,16 @@
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "tsc --noEmit && vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build:pages": "tsc --noEmit && vite build && esbuild _worker.ts --bundle --format=esm --target=esnext --platform=browser --outfile=dist/public/_worker.js --external:node:*",
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
-    "build:worker": "tsc --noEmit && vite build && wrangler deploy --dry-run",
-    "deploy": "tsc --noEmit && vite build && wrangler deploy",
-    "pages:dev": "wrangler pages dev dist/public",
+    "deploy": "pnpm build:pages && wrangler pages deploy dist/public",
+    "pages:dev": "wrangler pages dev dist/public --compatibility-date=2024-09-23 --compatibility-flags=nodejs_compat",
     "db:d1:init": "wrangler d1 execute ai-go-coach-db --file=drizzle/d1-schema.sql",
-    "db:d1:init:local": "wrangler d1 execute ai-go-coach-db --local --file=drizzle/d1-schema.sql",
-    "db:d1:init:preview": "wrangler d1 execute ai-go-coach-db --local --file=drizzle/d1-schema.sql"
+    "db:d1:init:local": "wrangler d1 execute ai-go-coach-db --local --file=drizzle/d1-schema.sql"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

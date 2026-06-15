@@ -1,5 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import type { D1Database } from "@cloudflare/workers-types";
 import { InsertUser, users, games, reviews, chatSessions, llmSettings, fullGameAnalysisProgress, Game, Review, ChatSession, LlmSetting, InsertLlmSetting, FullGameAnalysisProgress, InsertFullGameAnalysisProgress } from "../drizzle/schema";
 import { ENV } from './_core/env';
 

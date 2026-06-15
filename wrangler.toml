@@ -1,10 +1,7 @@
 name = "ai-go-coach"
-main = "worker/index.ts"
+pages_build_output_dir = "dist/public"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
-
-[assets]
-directory = "./dist/public"
 
 [[d1_databases]]
 binding = "DB"
@@ -15,8 +12,8 @@ database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
 VITE_APP_ID = ""
 OWNER_OPEN_ID = ""
 
-# Secrets (set via `wrangler secret put`):
-# JWT_SECRET
-# OAUTH_SERVER_URL
-# BUILT_IN_FORGE_API_URL
-# BUILT_IN_FORGE_API_KEY
+# Secrets — set via CF Pages dashboard → Settings → Environment Variables:
+#   JWT_SECRET
+#   OAUTH_SERVER_URL
+#   BUILT_IN_FORGE_API_URL   (optional)
+#   BUILT_IN_FORGE_API_KEY   (optional)
