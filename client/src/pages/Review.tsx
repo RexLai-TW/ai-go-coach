@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { ArrowLeft, Zap } from 'lucide-react';
+import { toast } from 'sonner';
 
 /**
  * Review page: Display game and AI analysis with chat
@@ -94,16 +95,35 @@ export default function Review() {
     if (!gameId) return;
 
     try {
-      setFullGameProgress({ current: 0, total: game?.totalMoves || 0 });
+      const totalMoves = game?.totalMoves || 0;
+      setFullGameProgress({ current: 0, total: totalMoves });
+      
+      // 開始分析
       await analyzeFullGameMutation.mutateAsync({ gameId });
 
-      // Refetch all reviews to get the full game results
-      const utils = trpc.useUtils();
-      await utils.analysis.getGameReviews.invalidate({ gameId });
-      setFullGameProgress(null);
+      // 分析完成後，輪詢進度直到完成
+      const pollInterval = setInterval(async () => {
+        try {
+          const progressData = await (trpc.analysis.getFullGameProgress as any).query({ gameId });
+          const analyzed = progressData.analyzedCount || 0;
+          setFullGameProgress({ current: analyzed, total: totalMoves });
+          
+          if (analyzed >= totalMoves) {
+            clearInterval(pollInterval);
+            // 分析完成，重新獲取所有複盤結果
+            const utils = trpc.useUtils();
+            await utils.analysis.getGameReviews.invalidate({ gameId });
+            setFullGameProgress(null);
+            toast.success('全局複盤完成！');
+          }
+        } catch (err) {
+          console.error('Error polling progress:', err);
+        }
+      }, 1000); // 每秒輪詢一次
     } catch (error) {
       console.error('Error analyzing game:', error);
       setFullGameProgress(null);
+      toast.error('全局複盤失敗，請重試');
     }
   };
 
@@ -119,8 +139,10 @@ export default function Review() {
 
       // Refetch chat history
       await chatHistoryQuery.refetch();
+      toast.success('訊息已發送');
     } catch (error) {
       console.error('Error sending message:', error);
+      toast.error('發送訊息失敗');
     }
   };
 
@@ -130,8 +152,10 @@ export default function Review() {
     try {
       await clearHistoryMutation.mutateAsync({ gameId });
       await chatHistoryQuery.refetch();
+      toast.success('對話已清除');
     } catch (error) {
       console.error('Error clearing history:', error);
+      toast.error('清除對話失敗');
     }
   };
 
@@ -192,10 +216,10 @@ export default function Review() {
           </Button>
         </div>
 
-        {/* Main content - Two column layout (8:2) */}
-        <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 mb-6">
-          {/* Left: Board + AI Review Panel (8 columns = 80%) */}
-          <div className="lg:col-span-8 flex flex-col gap-6">
+        {/* Main content - Two column layout (80:20) */}
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+          {/* Left: Board + AI Review Panel (4 columns = 80%) */}
+          <div className="lg:col-span-4 flex flex-col gap-6">
             {/* Board */}
             <Card className="p-6">
               <div className="overflow-x-auto flex justify-center">
@@ -272,9 +296,9 @@ export default function Review() {
             </div>
           </div>
 
-          {/* Right: Chat Review (2 columns = 20%) */}
-          <div className="lg:col-span-2">
-            <Card className="p-4 h-full flex flex-col">
+          {/* Right: Chat Review (1 column = 20%) */}
+          <div className="lg:col-span-1">
+            <Card className="p-4 h-full flex flex-col sticky top-6">
               <ChatReviewBox
                 messages={chatHistoryQuery.data?.messages || []}
                 isLoading={sendMessageMutation.isPending}
