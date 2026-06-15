@@ -21,15 +21,16 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import { GraduationCap, Home, Library, LogOut, PanelLeft, Settings as SettingsIcon } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+  { icon: Home, label: "首頁", path: "/" },
+  { icon: Library, label: "對局列表", path: "/games" },
+  { icon: SettingsIcon, label: "設定", path: "/settings" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -170,9 +171,15 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
-                  </span>
+                  <GraduationCap className="h-5 w-5 text-emerald-600 shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-semibold tracking-tight truncate leading-none">
+                      AI 圍棋教練
+                    </span>
+                    <span className="text-[10px] text-muted-foreground truncate mt-1">
+                      一盤好棋 · 智慧複盤
+                    </span>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -199,6 +206,17 @@ function DashboardLayoutContent({
                 );
               })}
             </SidebarMenu>
+
+            {!isCollapsed && (
+              <div className="px-3 mt-4">
+                <div className="rounded-lg border border-emerald-100 bg-emerald-50/60 p-3">
+                  <p className="text-xs font-semibold text-emerald-900 mb-1">今日推薦</p>
+                  <p className="text-xs text-emerald-700 leading-relaxed">
+                    「先撐住，再尋找雙活」——複習一個關於做活的基本手筋。
+                  </p>
+                </div>
+              </div>
+            )}
           </SidebarContent>
 
           <SidebarFooter className="p-3">

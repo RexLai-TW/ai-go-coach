@@ -212,15 +212,30 @@ const normalizeToolChoice = (
   return toolChoice;
 };
 
-const resolveApiUrl = () =>
-  ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
+/**
+ * Per-call overrides so callers can route a request through a user-configured
+ * OpenAI-compatible endpoint instead of the built-in Forge API.
+ */
+export type LLMOverrides = {
+  apiBaseUrl?: string;
+  apiKey?: string;
+};
+
+const resolveApiUrl = (overrides?: LLMOverrides) => {
+  if (overrides?.apiBaseUrl && overrides.apiBaseUrl.trim().length > 0) {
+    return `${overrides.apiBaseUrl.replace(/\/$/, "")}/chat/completions`;
+  }
+  return ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/chat/completions`
     : "https://forge.manus.im/v1/chat/completions";
+};
 
-const assertApiKey = () => {
-  if (!ENV.forgeApiKey) {
-    throw new Error("OPENAI_API_KEY is not configured");
+const resolveApiKey = (overrides?: LLMOverrides) => {
+  const key = overrides?.apiKey && overrides.apiKey.trim().length > 0 ? overrides.apiKey : ENV.forgeApiKey;
+  if (!key) {
+    throw new Error("No LLM API key is configured");
   }
+  return key;
 };
 
 const normalizeResponseFormat = ({
@@ -339,8 +354,8 @@ const fetchWithBackoff = async (
     : new Error("LLM request failed after exhausting retries");
 };
 
-export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
-  assertApiKey();
+export async function invokeLLM(params: InvokeParams, overrides?: LLMOverrides): Promise<InvokeResult> {
+  const apiKey = resolveApiKey(overrides);
 
   const {
     messages,
@@ -401,11 +416,11 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
     payload.response_format = normalizedResponseFormat;
   }
 
-  const response = await fetchWithBackoff(resolveApiUrl(), {
+  const response = await fetchWithBackoff(resolveApiUrl(overrides), {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ENV.forgeApiKey}`,
+      authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify(payload),
   });
@@ -433,14 +448,14 @@ export type ModelsResponse = {
 };
 
 export async function listLLMModels(): Promise<ModelsResponse> {
-  assertApiKey();
+  const apiKey = resolveApiKey();
 
   const url = ENV.forgeApiUrl && ENV.forgeApiUrl.trim().length > 0
     ? `${ENV.forgeApiUrl.replace(/\/$/, "")}/v1/models`
     : "https://forge.manus.im/v1/models";
 
   const response = await fetchWithBackoff(url, {
-    headers: { authorization: `Bearer ${ENV.forgeApiKey}` },
+    headers: { authorization: `Bearer ${apiKey}` },
   });
 
   if (!response.ok) {

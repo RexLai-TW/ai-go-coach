@@ -1,7 +1,10 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router } from '../_core/trpc';
 import { createGame, getUserGames, getGameById, deleteGame } from '../db';
 import { parseSGF } from '../services/sgf-parser';
+
+const MAX_SGF_BYTES = 2_000_000;
 
 /**
  * Games router: Handle SGF upload, retrieval, and deletion
@@ -15,14 +18,17 @@ export const gamesRouter = router({
       z.object({
         title: z.string().optional(),
         description: z.string().optional(),
-        sgfContent: z.string().min(10, 'SGF content too short'),
+        sgfContent: z
+          .string()
+          .min(10, 'SGF content too short')
+          .max(MAX_SGF_BYTES, 'SGF content too large'),
       })
     )
     .mutation(async ({ ctx, input }) => {
       // Validate SGF format
       const parsed = parseSGF(input.sgfContent);
       if (!parsed) {
-        throw new Error('Invalid SGF format');
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid SGF format' });
       }
 
       // Create game record
@@ -50,8 +56,8 @@ export const gamesRouter = router({
   list: protectedProcedure
     .input(
       z.object({
-        limit: z.number().default(20),
-        offset: z.number().default(0),
+        limit: z.number().int().min(1).max(100).default(20),
+        offset: z.number().int().min(0).default(0),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -77,18 +83,18 @@ export const gamesRouter = router({
    * Get a single game with full SGF content
    */
   get: protectedProcedure
-    .input(z.object({ gameId: z.number() }))
+    .input(z.object({ gameId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const game = await getGameById(input.gameId, ctx.user!.id);
 
       if (!game) {
-        throw new Error('Game not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Game not found' });
       }
 
       // Parse SGF to get move details
       const parsed = parseSGF(game.sgfContent);
       if (!parsed) {
-        throw new Error('Failed to parse game SGF');
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Failed to parse game SGF' });
       }
 
       return {
@@ -110,12 +116,12 @@ export const gamesRouter = router({
    * Delete a game
    */
   delete: protectedProcedure
-    .input(z.object({ gameId: z.number() }))
+    .input(z.object({ gameId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const game = await getGameById(input.gameId, ctx.user!.id);
 
       if (!game) {
-        throw new Error('Game not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Game not found' });
       }
 
       await deleteGame(input.gameId, ctx.user!.id);

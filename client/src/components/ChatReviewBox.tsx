@@ -33,14 +33,12 @@ export const ChatReviewBox: React.FC<ChatReviewBoxProps> = ({
   totalMoves = 0,
 }) => {
   const [inputValue, setInputValue] = useState('');
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom
+  // Auto-scroll to bottom whenever messages change or the AI starts responding.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [messages, isLoading]);
 
   const handleSend = () => {
     if (!inputValue.trim() || isLoading) return;
@@ -77,7 +75,7 @@ export const ChatReviewBox: React.FC<ChatReviewBoxProps> = ({
 
       <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
         {/* Messages area */}
-        <ScrollArea className="flex-1 p-4" ref={scrollRef}>
+        <ScrollArea className="flex-1 p-4">
           <div className="space-y-4">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center text-gray-500 py-8">
@@ -129,6 +127,7 @@ export const ChatReviewBox: React.FC<ChatReviewBoxProps> = ({
                 </div>
               </div>
             )}
+            <div ref={bottomRef} />
           </div>
         </ScrollArea>
 

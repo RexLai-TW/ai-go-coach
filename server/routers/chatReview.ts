@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router } from '../_core/trpc';
-import { createChatSession, getChatSession, addChatMessage, getChatMessages, getGameById, updateChatSession } from '../db';
-import { parseSGF, getBoardStateAfterMove, getGamePhase } from '../services/sgf-parser';
+import { createChatSession, getChatSession, appendChatMessages, getChatMessages, getGameById, updateChatSession } from '../db';
+import { parseSGF, getBoardStateAfterMove, getGamePhase, boardToASCIICompact } from '../services/sgf-parser';
 import { invokeLLM } from '../_core/llm';
+import { getUserLLMConfig } from '../services/llm-config';
 
 /**
  * Chat Review router: Handle conversational AI analysis
@@ -36,13 +38,13 @@ export const chatReviewRouter = router({
       // Get game for context
       const game = await getGameById(input.gameId, ctx.user!.id);
       if (!game) {
-        throw new Error('Game not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Game not found' });
       }
 
       // Parse SGF for board context
       const parsed = parseSGF(game.sgfContent);
       if (!parsed) {
-        throw new Error('Failed to parse game');
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Failed to parse game' });
       }
 
       // Get board state at specified move
@@ -99,16 +101,18 @@ ${input.message}`;
       });
 
       try {
-        // Call LLM
-        const response = await invokeLLM({ messages });
+        // Call LLM using the user's configured provider when available.
+        const llm = await getUserLLMConfig(ctx.user!.id);
+        const response = await invokeLLM({ messages, model: llm.model }, llm.overrides);
 
-        const aiResponse =
-          response.choices[0]?.message?.content ||
-          'Unable to generate response';
+        const content = response.choices[0]?.message?.content;
+        const aiResponse = typeof content === 'string' ? content : 'Unable to generate response';
 
-        // Save messages to database
-        await addChatMessage(sessionId, 'user', input.message);
-        await addChatMessage(sessionId, 'assistant', aiResponse as string);
+        // Persist both turns in a single write so the pair can't be split.
+        await appendChatMessages(sessionId, [
+          { role: 'user', content: input.message },
+          { role: 'assistant', content: aiResponse },
+        ]);
 
         return {
           sessionId,
@@ -117,7 +121,7 @@ ${input.message}`;
         };
       } catch (error) {
         console.error('[ChatReview] Error:', error);
-        throw new Error('Failed to get AI response');
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to get AI response' });
       }
     }),
 
@@ -130,7 +134,7 @@ ${input.message}`;
       // Verify ownership
       const game = await getGameById(input.gameId, ctx.user!.id);
       if (!game) {
-        throw new Error('Game not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Game not found' });
       }
 
       const session = await getChatSession(input.gameId, ctx.user!.id);
@@ -159,7 +163,7 @@ ${input.message}`;
       // Verify ownership
       const game = await getGameById(input.gameId, ctx.user!.id);
       if (!game) {
-        throw new Error('Game not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Game not found' });
       }
 
       const session = await getChatSession(input.gameId, ctx.user!.id);
@@ -172,29 +176,3 @@ ${input.message}`;
       return { success: true };
     }),
 });
-
-/**
- * Compact ASCII board representation for LLM
- */
-function boardToASCIICompact(board: number[][]): string {
-  let ascii = '  A B C D E F G H J K L M N O P Q R S T\n';
-
-  for (let row = 0; row < 19; row++) {
-    ascii += String(19 - row).padStart(2, ' ') + ' ';
-
-    for (let col = 0; col < 19; col++) {
-      const cell = board[row][col];
-      if (cell === 0) {
-        ascii += '. ';
-      } else if (cell === 1) {
-        ascii += '● ';
-      } else if (cell === 2) {
-        ascii += '○ ';
-      }
-    }
-
-    ascii += '\n';
-  }
-
-  return ascii;
-}
