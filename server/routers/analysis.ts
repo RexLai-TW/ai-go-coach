@@ -173,12 +173,20 @@ Format your response as JSON:
       const existingReviews = await getGameReviews(input.gameId, ctx.user!.id);
       const reviewedMoves = new Set(existingReviews.map(r => r.moveNumber));
 
-      // Analyze each move (skip already reviewed)
+      // Batch size: analyze max 5 moves per request to avoid timeout
+      const batchSize = 5;
+      let newReviewsCount = 0;
       const results = [];
+
       for (let i = 1; i <= parsed.moves.length; i++) {
         if (reviewedMoves.has(i)) {
           results.push(existingReviews.find(r => r.moveNumber === i));
           continue;
+        }
+
+        // Stop after 5 new analyses to avoid timeout
+        if (newReviewsCount >= batchSize) {
+          break;
         }
 
         try {
@@ -255,15 +263,20 @@ Format your response as JSON:
           });
 
           results.push(analysis);
+          newReviewsCount++;
         } catch (error) {
           console.error(`[Analysis] Error analyzing move ${i}:`, error);
         }
       }
 
+      // Get updated review count
+      const finalReviews = await getGameReviews(input.gameId, ctx.user!.id);
+
       return {
         totalMoves: parsed.totalMoves,
-        analyzedMoves: results.length,
-        results: results.slice(0, 10),
+        analyzedMoves: finalReviews.length,
+        newAnalyzed: newReviewsCount,
+        isComplete: finalReviews.length >= parsed.totalMoves,
       };
     }),
 

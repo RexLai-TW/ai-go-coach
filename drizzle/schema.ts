@@ -41,10 +41,29 @@ export const games = mysqlTable("games", {
   handicap: int("handicap").default(0),
   uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  // Heartbeat cron task UID for full game analysis
+  scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }).unique(),
 });
 
 export type Game = typeof games.$inferSelect;
 export type InsertGame = typeof games.$inferInsert;
+
+/**
+ * Full game analysis progress table
+ */
+export const fullGameAnalysisProgress = mysqlTable("fullGameAnalysisProgress", {
+  id: int("id").autoincrement().primaryKey(),
+  gameId: int("gameId").notNull().unique(),
+  userId: int("userId").notNull(),
+  totalMoves: int("totalMoves").notNull(),
+  analyzedMoves: int("analyzedMoves").default(0).notNull(),
+  status: mysqlEnum("status", ["pending", "analyzing", "completed", "failed"]).default("pending").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type FullGameAnalysisProgress = typeof fullGameAnalysisProgress.$inferSelect;
+export type InsertFullGameAnalysisProgress = typeof fullGameAnalysisProgress.$inferInsert;
 
 /**
  * 複盤記錄表：儲存 AI 對每一手棋的分析結果

@@ -1,6 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, games, reviews, chatSessions, llmSettings, Game, Review, ChatSession, LlmSetting, InsertLlmSetting } from "../drizzle/schema";
+import { InsertUser, users, games, reviews, chatSessions, llmSettings, fullGameAnalysisProgress, Game, Review, ChatSession, LlmSetting, InsertLlmSetting, FullGameAnalysisProgress, InsertFullGameAnalysisProgress } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -288,6 +288,55 @@ export async function getChatMessages(sessionId: number) {
     content: msg.content,
     createdAt: msg.timestamp ? new Date(msg.timestamp) : new Date(),
   }));
+}
+
+/**
+ * Full game analysis progress queries
+ */
+export async function createFullGameAnalysisProgress(input: InsertFullGameAnalysisProgress) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const result = await db.insert(fullGameAnalysisProgress).values(input);
+  return result[0]?.insertId;
+}
+
+export async function getFullGameAnalysisProgress(gameId: number, userId: number) {
+  const db = await getDb();
+  if (!db) return null;
+
+  const result = await db.select().from(fullGameAnalysisProgress).where(
+    and(
+      eq(fullGameAnalysisProgress.gameId, gameId),
+      eq(fullGameAnalysisProgress.userId, userId)
+    )
+  ).limit(1);
+
+  return result[0] ?? null;
+}
+
+export async function updateFullGameAnalysisProgress(gameId: number, userId: number, updates: Partial<Omit<FullGameAnalysisProgress, 'id' | 'createdAt'>>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.update(fullGameAnalysisProgress).set(updates).where(
+    and(
+      eq(fullGameAnalysisProgress.gameId, gameId),
+      eq(fullGameAnalysisProgress.userId, userId)
+    )
+  );
+}
+
+export async function deleteFullGameAnalysisProgress(gameId: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  await db.delete(fullGameAnalysisProgress).where(
+    and(
+      eq(fullGameAnalysisProgress.gameId, gameId),
+      eq(fullGameAnalysisProgress.userId, userId)
+    )
+  );
 }
 
 /**
