@@ -6,9 +6,10 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
-import { createContext } from "./context";
+import { createWorkerContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { validateEnv } from "./env";
+import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -29,6 +30,22 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
+// Adapt the Express request to a Web API Request for the worker context
+function createExpressContext(opts: CreateExpressContextOptions) {
+  const { req } = opts;
+  const protocol = req.protocol || "http";
+  const host = req.headers.host || "localhost";
+  const url = `${protocol}://${host}${req.originalUrl}`;
+
+  // Build a Web API Request from the Express request
+  const webRequest = new globalThis.Request(url, {
+    method: req.method,
+    headers: req.headers as Record<string, string>,
+  });
+
+  return createWorkerContext(webRequest);
+}
+
 async function startServer() {
   validateEnv();
 
@@ -44,7 +61,7 @@ async function startServer() {
     "/api/trpc",
     createExpressMiddleware({
       router: appRouter,
-      createContext,
+      createContext: createExpressContext,
     })
   );
   // development mode uses Vite, production mode uses static files

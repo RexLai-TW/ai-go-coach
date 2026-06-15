@@ -1,25 +1,25 @@
-import { index, int, json, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 /**
  * Core user table backing auth flow.
  * Extend this file with additional tables as your product grows.
  * Columns use camelCase to match both database fields and generated types.
  */
-export const users = mysqlTable("users", {
+export const users = sqliteTable("users", {
   /**
    * Surrogate primary key. Auto-incremented numeric value managed by the database.
    * Use this for relations between tables.
    */
-  id: int("id").autoincrement().primaryKey(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
   /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+  openId: text("openId").notNull().unique(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
+  email: text("email"),
+  loginMethod: text("loginMethod"),
+  role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  lastSignedIn: integer("lastSignedIn", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type User = typeof users.$inferSelect;
@@ -28,25 +28,25 @@ export type InsertUser = typeof users.$inferInsert;
 /**
  * 棋譜表：儲存使用者上傳的 SGF 棋譜檔案
  */
-export const games = mysqlTable(
+export const games = sqliteTable(
   "games",
   {
-    id: int("id").autoincrement().primaryKey(),
-    userId: int("userId")
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    title: varchar("title", { length: 255 }),
+    title: text("title"),
     description: text("description"),
     sgfContent: text("sgfContent").notNull(),
-    playerBlack: varchar("playerBlack", { length: 255 }),
-    playerWhite: varchar("playerWhite", { length: 255 }),
-    result: varchar("result", { length: 50 }),
+    playerBlack: text("playerBlack"),
+    playerWhite: text("playerWhite"),
+    result: text("result"),
     komi: text("komi"),
-    handicap: int("handicap").default(0),
-    uploadedAt: timestamp("uploadedAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    handicap: integer("handicap").default(0),
+    uploadedAt: integer("uploadedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
     // Heartbeat cron task UID for full game analysis
-    scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }).unique(),
+    scheduleCronTaskUid: text("scheduleCronTaskUid").unique(),
   },
   table => ({
     userIdx: index("games_userId_idx").on(table.userId),
@@ -59,20 +59,20 @@ export type InsertGame = typeof games.$inferInsert;
 /**
  * Full game analysis progress table
  */
-export const fullGameAnalysisProgress = mysqlTable("fullGameAnalysisProgress", {
-  id: int("id").autoincrement().primaryKey(),
-  gameId: int("gameId")
+export const fullGameAnalysisProgress = sqliteTable("fullGameAnalysisProgress", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  gameId: integer("gameId")
     .notNull()
     .unique()
     .references(() => games.id, { onDelete: "cascade" }),
-  userId: int("userId")
+  userId: integer("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  totalMoves: int("totalMoves").notNull(),
-  analyzedMoves: int("analyzedMoves").default(0).notNull(),
-  status: mysqlEnum("status", ["pending", "analyzing", "completed", "failed"]).default("pending").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  totalMoves: integer("totalMoves").notNull(),
+  analyzedMoves: integer("analyzedMoves").default(0).notNull(),
+  status: text("status", { enum: ["pending", "analyzing", "completed", "failed"] }).default("pending").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type FullGameAnalysisProgress = typeof fullGameAnalysisProgress.$inferSelect;
@@ -81,23 +81,23 @@ export type InsertFullGameAnalysisProgress = typeof fullGameAnalysisProgress.$in
 /**
  * 複盤記錄表：儲存 AI 對每一手棋的分析結果
  */
-export const reviews = mysqlTable(
+export const reviews = sqliteTable(
   "reviews",
   {
-    id: int("id").autoincrement().primaryKey(),
-    gameId: int("gameId")
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    gameId: integer("gameId")
       .notNull()
       .references(() => games.id, { onDelete: "cascade" }),
-    userId: int("userId")
+    userId: integer("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    moveNumber: int("moveNumber").notNull(),
-    evaluation: varchar("evaluation", { length: 50 }), // excellent, good, unclear, mistake, blunder
+    moveNumber: integer("moveNumber").notNull(),
+    evaluation: text("evaluation"), // excellent, good, unclear, mistake, blunder
     reason: text("reason"),
-    suggestedMoves: json("suggestedMoves"), // JSON array of { move, reason }
+    suggestedMoves: text("suggestedMoves", { mode: "json" }), // JSON array of { move, reason }
     strategy: text("strategy"),
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
   },
   table => ({
     gameUserIdx: index("reviews_gameId_userId_idx").on(table.gameId, table.userId),
@@ -110,19 +110,19 @@ export type InsertReview = typeof reviews.$inferInsert;
 /**
  * 對話記錄表：儲存 Chat Review 的對話歷史
  */
-export const chatSessions = mysqlTable(
+export const chatSessions = sqliteTable(
   "chat_sessions",
   {
-    id: int("id").autoincrement().primaryKey(),
-    gameId: int("gameId")
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    gameId: integer("gameId")
       .notNull()
       .references(() => games.id, { onDelete: "cascade" }),
-    userId: int("userId")
+    userId: integer("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    messages: json("messages").notNull(), // JSON array of { role, content, timestamp }
-    createdAt: timestamp("createdAt").defaultNow().notNull(),
-    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    messages: text("messages", { mode: "json" }).notNull(), // JSON array of { role, content, timestamp }
+    createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
   },
   table => ({
     gameUserIdx: index("chat_sessions_gameId_userId_idx").on(table.gameId, table.userId),
@@ -135,19 +135,19 @@ export type InsertChatSession = typeof chatSessions.$inferInsert;
 /**
  * LLM 設定表：儲存使用者的自訂 OpenAI 相容 API 設定
  */
-export const llmSettings = mysqlTable("llm_settings", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("userId")
+export const llmSettings = sqliteTable("llm_settings", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("userId")
     .notNull()
     .unique()
     .references(() => users.id, { onDelete: "cascade" }),
-  provider: varchar("provider", { length: 50 }).notNull(),
-  apiBaseUrl: varchar("apiBaseUrl", { length: 500 }),
+  provider: text("provider").notNull(),
+  apiBaseUrl: text("apiBaseUrl"),
   apiKey: text("apiKey"),
-  modelName: varchar("modelName", { length: 255 }),
-  isEnabled: int("isEnabled").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  modelName: text("modelName"),
+  isEnabled: integer("isEnabled").default(1).notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export type LlmSetting = typeof llmSettings.$inferSelect;

@@ -10,7 +10,13 @@
     "check": "tsc --noEmit",
     "format": "prettier --write .",
     "test": "vitest run",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate",
+    "build:worker": "tsc --noEmit && vite build && wrangler deploy --dry-run",
+    "deploy": "tsc --noEmit && vite build && wrangler deploy",
+    "pages:dev": "wrangler pages dev dist/public",
+    "db:d1:init": "wrangler d1 execute ai-go-coach-db --file=drizzle/d1-schema.sql",
+    "db:d1:init:local": "wrangler d1 execute ai-go-coach-db --local --file=drizzle/d1-schema.sql",
+    "db:d1:init:preview": "wrangler d1 execute ai-go-coach-db --local --file=drizzle/d1-schema.sql"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
@@ -80,6 +86,7 @@
   },
   "devDependencies": {
     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",
+    "@cloudflare/workers-types": "^4.20260615.1",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.3",
     "@types/express": "4.17.21",
@@ -101,7 +108,8 @@
     "typescript": "5.9.3",
     "vite": "^7.1.7",
     "vite-plugin-manus-runtime": "^0.0.58",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "wrangler": "^3.114.17"
   },
   "packageManager": "pnpm@10.4.1+sha512.c753b6c3ad7afa13af388fa6d808035a008e30ea9993f58c6663e2bc5ff21679aa834db094987129aa4d488b86df57f7b634981b2f827cdcacc698cc0cfb88af",
   "pnpm": {
@@ -110,6 +118,11 @@
     },
     "overrides": {
       "tailwindcss>nanoid": "3.3.7"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp",
+      "workerd"
+    ]
   }
 }

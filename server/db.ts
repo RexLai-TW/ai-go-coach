@@ -1,20 +1,15 @@
 import { and, asc, desc, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { drizzle } from "drizzle-orm/d1";
 import { InsertUser, users, games, reviews, chatSessions, llmSettings, fullGameAnalysisProgress, Game, Review, ChatSession, LlmSetting, InsertLlmSetting, FullGameAnalysisProgress, InsertFullGameAnalysisProgress } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// Lazily create the drizzle instance so local tooling can run without a DB.
-export async function getDb() {
-  if (!_db && process.env.DATABASE_URL) {
-    try {
-      _db = drizzle(process.env.DATABASE_URL);
-    } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
-    }
-  }
+export function initDb(d1: D1Database): void {
+  _db = drizzle(d1);
+}
+
+export async function getDb(): Promise<ReturnType<typeof drizzle> | null> {
   return _db;
 }
 
@@ -68,7 +63,10 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       updateSet.lastSignedIn = new Date();
     }
 
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
+    updateSet.updatedAt = new Date();
+
+    await db.insert(users).values(values).onConflictDoUpdate({
+      target: users.openId,
       set: updateSet,
     });
   } catch (error) {
@@ -123,9 +121,9 @@ export async function createGame(userId: number, input: {
     result: input.result,
     komi: input.komi,
     handicap: input.handicap ?? 0,
-  });
+  }).returning({ id: games.id });
 
-  return result[0]?.insertId;
+  return result[0]?.id;
 }
 
 export async function getUserGames(userId: number) {
@@ -229,9 +227,9 @@ export async function createChatSession(input: { gameId: number; userId: number 
     gameId: input.gameId,
     userId: input.userId,
     messages: [],
-  });
+  }).returning({ id: chatSessions.id });
 
-  return result[0]?.insertId;
+  return result[0]?.id;
 }
 
 export async function getChatSession(gameId: number, userId: number) {
@@ -268,6 +266,7 @@ export async function addChatMessage(sessionId: number, role: 'user' | 'assistan
 
   await db.update(chatSessions).set({
     messages: messages as any,
+    updatedAt: new Date(),
   }).where(eq(chatSessions.id, sessionId));
 }
 
@@ -291,7 +290,7 @@ export async function appendChatMessages(
     messages.push({ role: msg.role, content: msg.content, timestamp });
   }
 
-  await db.update(chatSessions).set({ messages }).where(eq(chatSessions.id, sessionId));
+  await db.update(chatSessions).set({ messages, updatedAt: new Date() }).where(eq(chatSessions.id, sessionId));
 }
 
 export async function getChatMessages(sessionId: number) {
@@ -320,8 +319,8 @@ export async function createFullGameAnalysisProgress(input: InsertFullGameAnalys
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  const result = await db.insert(fullGameAnalysisProgress).values(input);
-  return result[0]?.insertId;
+  const result = await db.insert(fullGameAnalysisProgress).values(input).returning({ id: fullGameAnalysisProgress.id });
+  return result[0]?.id;
 }
 
 export async function getFullGameAnalysisProgress(gameId: number, userId: number) {
@@ -342,7 +341,10 @@ export async function updateFullGameAnalysisProgress(gameId: number, userId: num
   const db = await getDb();
   if (!db) throw new Error("Database not available");
 
-  await db.update(fullGameAnalysisProgress).set(updates).where(
+  await db.update(fullGameAnalysisProgress).set({
+    ...updates,
+    updatedAt: new Date(),
+  }).where(
     and(
       eq(fullGameAnalysisProgress.gameId, gameId),
       eq(fullGameAnalysisProgress.userId, userId)
@@ -416,6 +418,7 @@ export async function updateChatSession(gameId: number, userId: number, messages
 
   await db.update(chatSessions).set({
     messages,
+    updatedAt: new Date(),
   }).where(
     and(
       eq(chatSessions.gameId, gameId),
