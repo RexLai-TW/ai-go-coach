@@ -1,6 +1,7 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, SkipBack, SkipForward } from 'lucide-react';
+import { computeBoardState, coordToIndices, BOARD_DIM } from '@shared/go-board';
 
 interface Move {
   moveNumber: number;
@@ -16,11 +17,12 @@ interface GoBoardProps {
   width?: number;
   height?: number;
   analyzedMoves?: number[];
+  showMoveList?: boolean;
 }
 
 /**
- * Interactive Go board component using Canvas
- * Displays 19x19 board with stones and move history
+ * Interactive Go board component using Canvas.
+ * Displays a 19x19 board with capture-aware stone placement and move history.
  */
 export const GoBoard: React.FC<GoBoardProps> = ({
   moves,
@@ -29,44 +31,35 @@ export const GoBoard: React.FC<GoBoardProps> = ({
   width = 700,
   height = 700,
   analyzedMoves = [],
+  showMoveList = true,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [displayMove, setDisplayMove] = useState(currentMoveNumber);
 
-  const BOARD_SIZE = 19;
-  // Responsive margin based on board size
   const MARGIN = Math.max(30, Math.min(50, width * 0.07));
-  const CELL_SIZE = (width - 2 * MARGIN) / (BOARD_SIZE - 1);
+  const CELL_SIZE = (width - 2 * MARGIN) / (BOARD_DIM - 1);
 
-  // Coordinate conversion: "P16" -> [15, 3], "A10" -> [9, 0]
-  const coordinateToIndices = (coord: string): [number, number] | null => {
-    if (coord === 'pass') return null;
-    if (coord.length < 2) return null;
+  // Keep the board in sync when the parent drives the current move.
+  useEffect(() => {
+    setDisplayMove(currentMoveNumber);
+  }, [currentMoveNumber]);
 
-    const col = coord.charCodeAt(0) - 'A'.charCodeAt(0);
-    const row = 19 - parseInt(coord.slice(1), 10);
-
-    if (col < 0 || col > 18 || row < 0 || row > 18) return null;
-    return [row, col];
+  const selectMove = (moveNumber: number) => {
+    setDisplayMove(moveNumber);
+    onMoveSelect?.(moveNumber);
   };
 
-  // Build board state from moves
-  const getBoardState = (upToMove: number) => {
-    const board: number[][] = Array(19)
-      .fill(null)
-      .map(() => Array(19).fill(0));
-
-    for (let i = 0; i < Math.min(upToMove, moves.length); i++) {
-      const move = moves[i];
-      const indices = coordinateToIndices(move.coordinate);
-      if (indices) {
-        const [row, col] = indices;
-        board[row][col] = move.player === 'black' ? 1 : 2;
-      }
-    }
-
-    return board;
-  };
+  // Set of "row,col" keys for analyzed moves so the draw loop can look them up in O(1).
+  const analyzedKeys = useMemo(() => {
+    const set = new Set<string>();
+    const analyzedSet = new Set(analyzedMoves);
+    moves.forEach((move, idx) => {
+      if (!analyzedSet.has(idx + 1)) return;
+      const indices = coordToIndices(move.coordinate);
+      if (indices) set.add(`${indices[0]},${indices[1]}`);
+    });
+    return set;
+  }, [moves, analyzedMoves]);
 
   // Draw board
   useEffect(() => {
@@ -76,50 +69,37 @@ export const GoBoard: React.FC<GoBoardProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas resolution to match display size (fix for high-DPI displays)
+    // Match the backing store to the device pixel ratio for crisp rendering.
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // Clear canvas with proper dimensions
     ctx.clearRect(0, 0, width, height);
     ctx.fillStyle = '#DEB887';
     ctx.fillRect(0, 0, width, height);
 
-    // Draw grid
+    // Grid
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 1;
-
-    for (let i = 0; i < BOARD_SIZE; i++) {
+    for (let i = 0; i < BOARD_DIM; i++) {
       const pos = MARGIN + i * CELL_SIZE;
-
-      // Vertical lines
       ctx.beginPath();
       ctx.moveTo(pos, MARGIN);
       ctx.lineTo(pos, height - MARGIN);
       ctx.stroke();
-
-      // Horizontal lines
       ctx.beginPath();
       ctx.moveTo(MARGIN, pos);
       ctx.lineTo(width - MARGIN, pos);
       ctx.stroke();
     }
 
-    // Draw star points (hoshi)
+    // Star points (hoshi)
     const starPoints = [
-      [3, 3],
-      [3, 9],
-      [3, 15],
-      [9, 3],
-      [9, 9],
-      [9, 15],
-      [15, 3],
-      [15, 9],
-      [15, 15],
+      [3, 3], [3, 9], [3, 15],
+      [9, 3], [9, 9], [9, 15],
+      [15, 3], [15, 9], [15, 15],
     ];
-
     ctx.fillStyle = '#000';
     starPoints.forEach(([row, col]) => {
       const x = MARGIN + col * CELL_SIZE;
@@ -129,38 +109,36 @@ export const GoBoard: React.FC<GoBoardProps> = ({
       ctx.fill();
     });
 
-    // Draw coordinates
+    // Coordinates
     ctx.fillStyle = '#000';
     ctx.font = 'bold 12px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-
-    for (let i = 0; i < BOARD_SIZE; i++) {
+    for (let i = 0; i < BOARD_DIM; i++) {
       const col = String.fromCharCode('A'.charCodeAt(0) + i);
-      const row = 19 - i;
-
-      // Top labels
+      const row = BOARD_DIM - i;
       ctx.fillText(col, MARGIN + i * CELL_SIZE, MARGIN - 20);
-      // Bottom labels
       ctx.fillText(col, MARGIN + i * CELL_SIZE, height - MARGIN + 20);
-      // Left labels
       ctx.fillText(String(row), MARGIN - 20, MARGIN + i * CELL_SIZE);
-      // Right labels
       ctx.fillText(String(row), width - MARGIN + 20, MARGIN + i * CELL_SIZE);
     }
 
-    // Draw stones
-    const board = getBoardState(displayMove);
+    // Stones (capture-aware position)
+    const board = computeBoardState(moves, displayMove);
+    const lastMoveIndices =
+      displayMove > 0 && displayMove <= moves.length
+        ? coordToIndices(moves[displayMove - 1].coordinate)
+        : null;
 
-    for (let row = 0; row < BOARD_SIZE; row++) {
-      for (let col = 0; col < BOARD_SIZE; col++) {
+    for (let row = 0; row < BOARD_DIM; row++) {
+      for (let col = 0; col < BOARD_DIM; col++) {
         const cell = board[row][col];
         if (cell === 0) continue;
 
         const x = MARGIN + col * CELL_SIZE;
         const y = MARGIN + row * CELL_SIZE;
 
-        // Stone shadow
+        // Shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
         ctx.beginPath();
         ctx.arc(x + 2, y + 2, CELL_SIZE / 2 - 2, 0, Math.PI * 2);
@@ -175,91 +153,58 @@ export const GoBoard: React.FC<GoBoardProps> = ({
         ctx.fill();
         ctx.stroke();
 
-        // Highlight last move with red circle
-        if (displayMove > 0 && displayMove <= moves.length) {
-          const lastMove = moves[displayMove - 1];
-          const lastMoveIndices = coordinateToIndices(lastMove.coordinate);
-          if (lastMoveIndices && lastMoveIndices[0] === row && lastMoveIndices[1] === col) {
-            ctx.strokeStyle = '#ff0000';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(x, y, CELL_SIZE / 2 + 2, 0, Math.PI * 2);
-            ctx.stroke();
-          }
+        // Highlight the last played stone
+        if (lastMoveIndices && lastMoveIndices[0] === row && lastMoveIndices[1] === col) {
+          ctx.strokeStyle = '#ff0000';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(x, y, CELL_SIZE / 2 + 2, 0, Math.PI * 2);
+          ctx.stroke();
         }
 
-        // Mark analyzed moves with a small indicator
-        for (let i = 0; i < moves.length; i++) {
-          if (analyzedMoves.includes(i + 1)) {
-            const moveIndices = coordinateToIndices(moves[i].coordinate);
-            if (moveIndices && moveIndices[0] === row && moveIndices[1] === col) {
-              ctx.fillStyle = '#22c55e';
-              ctx.beginPath();
-              ctx.arc(x + CELL_SIZE / 2 - 4, y - CELL_SIZE / 2 + 4, 4, 0, Math.PI * 2);
-              ctx.fill();
-              break;
-            }
-          }
+        // Mark analyzed moves whose stone is still on the board
+        if (analyzedKeys.has(`${row},${col}`)) {
+          ctx.fillStyle = '#22c55e';
+          ctx.beginPath();
+          ctx.arc(x + CELL_SIZE / 2 - 4, y - CELL_SIZE / 2 + 4, 4, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
     }
-  }, [displayMove, moves, width, height, analyzedMoves]);
-
-  const handlePrevMove = () => {
-    const newMove = Math.max(0, displayMove - 1);
-    setDisplayMove(newMove);
-    onMoveSelect?.(newMove);
-  };
-
-  const handleNextMove = () => {
-    const newMove = Math.min(moves.length, displayMove + 1);
-    setDisplayMove(newMove);
-    onMoveSelect?.(newMove);
-  };
-
-  const handleFirstMove = () => {
-    setDisplayMove(0);
-    onMoveSelect?.(0);
-  };
-
-  const handleLastMove = () => {
-    setDisplayMove(moves.length);
-    onMoveSelect?.(moves.length);
-  };
+  }, [displayMove, moves, width, height, MARGIN, CELL_SIZE, analyzedKeys]);
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Only handle if not in an input field
-      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
-        return;
-      }
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
 
       switch (e.key) {
         case 'ArrowLeft':
           e.preventDefault();
-          handlePrevMove();
+          selectMove(Math.max(0, displayMove - 1));
           break;
         case 'ArrowRight':
           e.preventDefault();
-          handleNextMove();
+          selectMove(Math.min(moves.length, displayMove + 1));
           break;
         case 'Home':
           e.preventDefault();
-          handleFirstMove();
+          selectMove(0);
           break;
         case 'End':
           e.preventDefault();
-          handleLastMove();
+          selectMove(moves.length);
           break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayMove, moves.length]);
 
-  // Canvas click handler for move navigation
+  // Canvas click navigates to a played stone's move
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -267,21 +212,14 @@ export const GoBoard: React.FC<GoBoardProps> = ({
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-
-    // Calculate which intersection was clicked
     const clickCol = Math.round((x - MARGIN) / CELL_SIZE);
     const clickRow = Math.round((y - MARGIN) / CELL_SIZE);
 
-    // Check if click is within board bounds
-    if (clickCol >= 0 && clickCol < BOARD_SIZE && clickRow >= 0 && clickRow < BOARD_SIZE) {
-      // Find the move at this position
-      for (let i = 0; i < Math.min(displayMove, moves.length); i++) {
-        const move = moves[i];
-        const indices = coordinateToIndices(move.coordinate);
+    if (clickCol >= 0 && clickCol < BOARD_DIM && clickRow >= 0 && clickRow < BOARD_DIM) {
+      for (let i = Math.min(displayMove, moves.length) - 1; i >= 0; i--) {
+        const indices = coordToIndices(moves[i].coordinate);
         if (indices && indices[0] === clickRow && indices[1] === clickCol) {
-          // Found a stone at this position, navigate to this move
-          setDisplayMove(i + 1);
-          onMoveSelect?.(i + 1);
+          selectMove(i + 1);
           return;
         }
       }
@@ -293,6 +231,8 @@ export const GoBoard: React.FC<GoBoardProps> = ({
       <canvas
         ref={canvasRef}
         onClick={handleCanvasClick}
+        role="img"
+        aria-label={`圍棋棋盤，目前顯示第 ${displayMove} 手，共 ${moves.length} 手`}
         style={{
           width: `${width}px`,
           height: `${height}px`,
@@ -307,71 +247,50 @@ export const GoBoard: React.FC<GoBoardProps> = ({
 
       {/* Navigation controls */}
       <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleFirstMove}
-          title="First move"
-        >
+        <Button variant="outline" size="sm" onClick={() => selectMove(0)} title="First move">
           <SkipBack className="w-4 h-4" />
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handlePrevMove}
-          title="Previous move"
-        >
+        <Button variant="outline" size="sm" onClick={() => selectMove(Math.max(0, displayMove - 1))} title="Previous move">
           <ChevronLeft className="w-4 h-4" />
         </Button>
 
         <span className="text-sm font-medium px-4 text-gray-600">
-          Move {displayMove} / {moves.length}
+          第 {displayMove} / {moves.length} 手
           <span className="text-xs text-gray-500 ml-2">(← → 上下鍵 | Home/End 首尾)</span>
         </span>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleNextMove}
-          title="Next move"
-        >
+        <Button variant="outline" size="sm" onClick={() => selectMove(Math.min(moves.length, displayMove + 1))} title="Next move">
           <ChevronRight className="w-4 h-4" />
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleLastMove}
-          title="Last move"
-        >
+        <Button variant="outline" size="sm" onClick={() => selectMove(moves.length)} title="Last move">
           <SkipForward className="w-4 h-4" />
         </Button>
       </div>
 
       {/* Move history */}
-      <div className="w-full">
-        <p className="text-xs text-gray-600 mb-2 font-medium">落子序列 (點擊或按數字鍵跳轉)</p>
-        <div className="max-h-40 overflow-y-auto border rounded p-3 bg-gray-50">
-          <div className="grid grid-cols-10 gap-1">
-            {moves.map((move, idx) => (
-              <button
-                key={idx}
-                onClick={() => {
-                  setDisplayMove(idx + 1);
-                  onMoveSelect?.(idx + 1);
-                }}
-                className={`p-1 text-xs rounded text-center cursor-pointer transition-colors ${
-                  displayMove === idx + 1
-                    ? 'bg-blue-500 text-white font-bold'
-                    : 'bg-gray-200 hover:bg-gray-300'
-                }`}
-                title={`${move.player === 'black' ? '黑' : '白'} ${move.coordinate}`}
-              >
-                {idx + 1}
-              </button>
-            ))}
+      {showMoveList && (
+        <div className="w-full">
+          <p className="text-xs text-gray-600 mb-2 font-medium">落子序列（點擊跳轉）</p>
+          <div className="max-h-40 overflow-y-auto border rounded p-3 bg-gray-50">
+            <div className="grid grid-cols-10 gap-1">
+              {moves.map((move, idx) => (
+                <button
+                  key={`${idx}-${move.coordinate}`}
+                  onClick={() => selectMove(idx + 1)}
+                  className={`p-1 text-xs rounded text-center cursor-pointer transition-colors ${
+                    displayMove === idx + 1
+                      ? 'bg-emerald-600 text-white font-bold'
+                      : 'bg-gray-200 hover:bg-gray-300'
+                  }`}
+                  title={`${move.player === 'black' ? '黑' : '白'} ${move.coordinate}`}
+                >
+                  {idx + 1}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

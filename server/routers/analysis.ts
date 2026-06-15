@@ -1,12 +1,131 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router } from '../_core/trpc';
 import { getGameById, createReview, getReview, getGameReviews } from '../db';
-import { parseSGF, getBoardStateAfterMove, getLastMoves, getGamePhase } from '../services/sgf-parser';
+import {
+  parseSGF,
+  getBoardStateAfterMove,
+  getLastMoves,
+  getGamePhase,
+  boardToASCIICompact,
+  type Move,
+  type ParsedGame,
+} from '../services/sgf-parser';
 import { invokeLLM } from '../_core/llm';
+import { MOVE_EVALUATIONS } from '@shared/const';
 
 /**
  * Analysis router: Handle AI analysis of moves and full game reviews
  */
+
+const ANALYSIS_SYSTEM_PROMPT = `You are an expert Go teacher. Analyze the given board position and provide educational guidance.
+Guidelines:
+1. Evaluate moves based on strategic principles, not exact winrates
+2. Explain in simple, accessible language suitable for intermediate players
+3. Suggest 2-3 alternative moves with brief reasoning
+4. Describe the strategic direction and long-term implications
+5. Never hallucinate exact winrates or claim certainty you don't have
+6. Use Go terminology correctly (influence, territory, thickness, etc.)
+7. Focus on teaching value over technical precision
+
+Respond in Traditional Chinese.`;
+
+function buildUserPrompt(args: {
+  moveNumber: number;
+  move: Move;
+  lastMoves: string[];
+  phase: string;
+  boardAscii: string;
+}): string {
+  return `Analyze this Go position:
+
+Move Number: ${args.moveNumber}
+Player: ${args.move.player === 'black' ? 'Black' : 'White'}
+Last Move: ${args.move.coordinate}
+Last 5 Moves: ${args.lastMoves.join(', ')}
+Game Phase: ${args.phase}
+
+Board State:
+${args.boardAscii}
+
+Provide:
+1. Move Evaluation: Rate the move
+2. Explanation: Why in 2-3 sentences?
+3. Alternative Moves: Suggest 2 better moves with brief reasoning
+4. Strategic Direction: What's the player trying to achieve?
+
+Format your response as JSON:
+{
+  "evaluation": "${MOVE_EVALUATIONS.join('|')}",
+  "reason": "...",
+  "suggestedMoves": [
+    { "move": "...", "reason": "..." },
+    { "move": "...", "reason": "..." }
+  ],
+  "strategy": "..."
+}`;
+}
+
+interface MoveAnalysis {
+  evaluation: string;
+  reason: string;
+  suggestedMoves: Array<{ move: string; reason: string }>;
+  strategy: string;
+}
+
+/**
+ * Run the LLM on a single move and persist the review. Returns the parsed analysis.
+ * Throws on LLM/parse failure so callers can decide how to handle it.
+ */
+async function analyzeMoveAt(
+  parsed: ParsedGame,
+  gameId: number,
+  userId: number,
+  moveNumber: number
+): Promise<MoveAnalysis> {
+  const move = parsed.moves[moveNumber - 1];
+  const board = getBoardStateAfterMove(parsed.moves, moveNumber);
+  const lastMoves = getLastMoves(parsed.moves, moveNumber, 5);
+  const phase = getGamePhase(moveNumber, parsed.totalMoves);
+  const boardAscii = boardToASCIICompact(board);
+
+  const response = await invokeLLM({
+    messages: [
+      { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
+      { role: 'user', content: buildUserPrompt({ moveNumber, move, lastMoves, phase, boardAscii }) },
+    ],
+  });
+
+  const messageContent = response.choices[0]?.message?.content;
+  if (!messageContent || typeof messageContent !== 'string') {
+    throw new Error('Invalid LLM response');
+  }
+
+  const jsonMatch = messageContent.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('Failed to parse LLM response');
+  }
+
+  let analysis: MoveAnalysis;
+  try {
+    analysis = JSON.parse(jsonMatch[0]);
+  } catch {
+    throw new Error('LLM returned malformed JSON');
+  }
+
+  await createReview({
+    gameId,
+    userId,
+    moveNumber,
+    evaluation: analysis.evaluation,
+    reason: analysis.reason,
+    suggestedMoves: analysis.suggestedMoves,
+    strategy: analysis.strategy,
+  });
+
+  return analysis;
+}
+
 export const analysisRouter = router({
   /**
    * Analyze a single move
@@ -14,119 +133,36 @@ export const analysisRouter = router({
   analyzeMove: protectedProcedure
     .input(
       z.object({
-        gameId: z.number(),
-        moveNumber: z.number().min(1),
+        gameId: z.number().int().positive(),
+        moveNumber: z.number().int().min(1),
       })
     )
     .mutation(async ({ ctx, input }) => {
-      // Get game
       const game = await getGameById(input.gameId, ctx.user!.id);
       if (!game) {
-        throw new Error('Game not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Game not found' });
       }
 
-      // Parse SGF
       const parsed = parseSGF(game.sgfContent);
       if (!parsed) {
-        throw new Error('Failed to parse game');
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Failed to parse game' });
       }
 
-      // Validate move number
-      if (input.moveNumber < 1 || input.moveNumber > parsed.moves.length) {
-        throw new Error('Invalid move number');
+      if (input.moveNumber > parsed.moves.length) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid move number' });
       }
 
-      // Check if review already exists
+      // Return existing review if already analyzed
       const existing = await getReview(input.gameId, input.moveNumber, ctx.user!.id);
       if (existing) {
         return existing;
       }
 
-      // Get move and board state
-      const move = parsed.moves[input.moveNumber - 1];
-      const board = getBoardStateAfterMove(parsed.moves, input.moveNumber);
-      const lastMoves = getLastMoves(parsed.moves, input.moveNumber, 5);
-      const phase = getGamePhase(input.moveNumber, parsed.totalMoves);
-
-      // Build prompt for LLM
-      const boardAscii = boardToASCIICompact(board);
-      const systemPrompt = `You are an expert Go teacher. Analyze the given board position and provide educational guidance.
-Guidelines:
-1. Evaluate moves based on strategic principles, not exact winrates
-2. Explain in simple, accessible language suitable for intermediate players
-3. Suggest 2-3 alternative moves with brief reasoning
-4. Describe the strategic direction and long-term implications
-5. Never hallucinate exact winrates or claim certainty you don't have
-6. Use Go terminology correctly (influence, territory, thickness, etc.)
-7. Focus on teaching value over technical precision
-
-Respond in Traditional Chinese.`;
-
-      const userPrompt = `Analyze this Go position:
-
-Move Number: ${input.moveNumber}
-Player: ${move.player === 'black' ? 'Black' : 'White'}
-Last Move: ${move.coordinate}
-Last 5 Moves: ${lastMoves.join(', ')}
-Game Phase: ${phase}
-
-Board State:
-${boardAscii}
-
-Provide:
-1. Move Evaluation: Is this move good/bad/unclear?
-2. Explanation: Why in 2-3 sentences?
-3. Alternative Moves: Suggest 2 better moves with brief reasoning
-4. Strategic Direction: What's the player trying to achieve?
-
-Format your response as JSON:
-{
-  "evaluation": "good|bad|unclear",
-  "reason": "...",
-  "suggestedMoves": [
-    { "move": "...", "reason": "..." },
-    { "move": "...", "reason": "..." }
-  ],
-  "strategy": "..."
-}`;
-
       try {
-        // Call LLM
-        const response = await invokeLLM({
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-        });
-
-        // Parse response
-        const messageContent = response.choices[0]?.message?.content;
-        if (!messageContent || typeof messageContent !== 'string') {
-          throw new Error('Invalid LLM response');
-        }
-
-        const jsonMatch = messageContent.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-          throw new Error('Failed to parse LLM response');
-        }
-
-        const analysis = JSON.parse(jsonMatch[0]);
-
-        // Save review
-        await createReview({
-          gameId: input.gameId,
-          userId: ctx.user!.id,
-          moveNumber: input.moveNumber,
-          evaluation: analysis.evaluation,
-          reason: analysis.reason,
-          suggestedMoves: analysis.suggestedMoves,
-          strategy: analysis.strategy,
-        });
-
-        return analysis;
+        return await analyzeMoveAt(parsed, input.gameId, ctx.user!.id, input.moveNumber);
       } catch (error) {
         console.error('[Analysis] Error analyzing move:', error);
-        throw new Error('Failed to analyze move');
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to analyze move' });
       }
     }),
 
@@ -134,149 +170,65 @@ Format your response as JSON:
    * Get full game analysis progress
    */
   getFullGameProgress: protectedProcedure
-    .input(z.object({ gameId: z.number() }))
+    .input(z.object({ gameId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
-      const reviews = await getGameReviews(input.gameId, ctx.user!.id);
       const game = await getGameById(input.gameId, ctx.user!.id);
       if (!game) {
-        throw new Error('Game not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Game not found' });
       }
       const parsed = parseSGF(game.sgfContent);
       if (!parsed) {
-        throw new Error('Failed to parse game');
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Failed to parse game' });
       }
+      const reviews = await getGameReviews(input.gameId, ctx.user!.id);
       return {
         analyzed: reviews.length,
         total: parsed.totalMoves,
+        isComplete: reviews.length >= parsed.totalMoves,
       };
     }),
 
   /**
-   * Analyze full game (all moves)
+   * Analyze a batch of the next unreviewed moves (capped to avoid request timeouts).
+   * The client polls getFullGameProgress and re-invokes this until isComplete.
    */
   analyzeFullGame: protectedProcedure
-    .input(z.object({ gameId: z.number() }))
+    .input(z.object({ gameId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
-      // Get game
       const game = await getGameById(input.gameId, ctx.user!.id);
       if (!game) {
-        throw new Error('Game not found');
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Game not found' });
       }
 
-      // Parse SGF
       const parsed = parseSGF(game.sgfContent);
       if (!parsed) {
-        throw new Error('Failed to parse game');
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Failed to parse game' });
       }
 
-      // Check existing reviews
       const existingReviews = await getGameReviews(input.gameId, ctx.user!.id);
       const reviewedMoves = new Set(existingReviews.map(r => r.moveNumber));
 
-      // Batch size: analyze max 5 moves per request to avoid timeout
+      // Analyze at most 5 new moves per request to stay under the timeout limit.
       const batchSize = 5;
       let newReviewsCount = 0;
-      const results = [];
 
-      for (let i = 1; i <= parsed.moves.length; i++) {
-        if (reviewedMoves.has(i)) {
-          results.push(existingReviews.find(r => r.moveNumber === i));
-          continue;
-        }
-
-        // Stop after 5 new analyses to avoid timeout
-        if (newReviewsCount >= batchSize) {
-          break;
-        }
+      for (let i = 1; i <= parsed.moves.length && newReviewsCount < batchSize; i++) {
+        if (reviewedMoves.has(i)) continue;
 
         try {
-          // Reuse analyzeMove logic
-          const move = parsed.moves[i - 1];
-          const board = getBoardStateAfterMove(parsed.moves, i);
-          const lastMoves = getLastMoves(parsed.moves, i, 5);
-          const phase = getGamePhase(i, parsed.totalMoves);
-
-          const boardAscii = boardToASCIICompact(board);
-          const systemPrompt = `You are an expert Go teacher. Analyze the given board position and provide educational guidance.
-Guidelines:
-1. Evaluate moves based on strategic principles, not exact winrates
-2. Explain in simple, accessible language suitable for intermediate players
-3. Suggest 2-3 alternative moves with brief reasoning
-4. Describe the strategic direction and long-term implications
-5. Never hallucinate exact winrates or claim certainty you don't have
-6. Use Go terminology correctly (influence, territory, thickness, etc.)
-7. Focus on teaching value over technical precision
-
-Respond in Traditional Chinese.`;
-
-          const userPrompt = `Analyze this Go position:
-
-Move Number: ${i}
-Player: ${move.player === 'black' ? 'Black' : 'White'}
-Last Move: ${move.coordinate}
-Last 5 Moves: ${lastMoves.join(', ')}
-Game Phase: ${phase}
-
-Board State:
-${boardAscii}
-
-Provide:
-1. Move Evaluation: Is this move good/bad/unclear?
-2. Explanation: Why in 2-3 sentences?
-3. Alternative Moves: Suggest 2 better moves with brief reasoning
-4. Strategic Direction: What's the player trying to achieve?
-
-Format your response as JSON:
-{
-  "evaluation": "good|bad|unclear",
-  "reason": "...",
-  "suggestedMoves": [
-    { "move": "...", "reason": "..." },
-    { "move": "...", "reason": "..." }
-  ],
-  "strategy": "..."
-}`;
-
-          const response = await invokeLLM({
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt },
-            ],
-          });
-
-          const messageContent = response.choices[0]?.message?.content;
-          if (!messageContent || typeof messageContent !== 'string') continue;
-
-          const jsonMatch = messageContent.match(/\{[\s\S]*\}/);
-          if (!jsonMatch) continue;
-
-          const analysis = JSON.parse(jsonMatch[0]);
-
-          await createReview({
-            gameId: input.gameId,
-            userId: ctx.user!.id,
-            moveNumber: i,
-            evaluation: analysis.evaluation,
-            reason: analysis.reason,
-            suggestedMoves: analysis.suggestedMoves,
-            strategy: analysis.strategy,
-          });
-
-          results.push(analysis);
+          await analyzeMoveAt(parsed, input.gameId, ctx.user!.id, i);
           newReviewsCount++;
         } catch (error) {
           console.error(`[Analysis] Error analyzing move ${i}:`, error);
         }
       }
 
-      // Get updated review count
-      const finalReviews = await getGameReviews(input.gameId, ctx.user!.id);
-
+      const analyzedMoves = existingReviews.length + newReviewsCount;
       return {
         totalMoves: parsed.totalMoves,
-        analyzedMoves: finalReviews.length,
+        analyzedMoves,
         newAnalyzed: newReviewsCount,
-        isComplete: finalReviews.length >= parsed.totalMoves,
+        isComplete: analyzedMoves >= parsed.totalMoves,
       };
     }),
 
@@ -286,8 +238,8 @@ Format your response as JSON:
   getReview: protectedProcedure
     .input(
       z.object({
-        gameId: z.number(),
-        moveNumber: z.number(),
+        gameId: z.number().int().positive(),
+        moveNumber: z.number().int(),
       })
     )
     .query(async ({ ctx, input }) => {
@@ -299,34 +251,8 @@ Format your response as JSON:
    * Get all reviews for a game
    */
   getGameReviews: protectedProcedure
-    .input(z.object({ gameId: z.number() }))
+    .input(z.object({ gameId: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       return await getGameReviews(input.gameId, ctx.user!.id);
     }),
 });
-
-/**
- * Compact ASCII board representation for LLM
- */
-function boardToASCIICompact(board: number[][]): string {
-  let ascii = '  A B C D E F G H J K L M N O P Q R S T\n';
-
-  for (let row = 0; row < 19; row++) {
-    ascii += String(19 - row).padStart(2, ' ') + ' ';
-
-    for (let col = 0; col < 19; col++) {
-      const cell = board[row][col];
-      if (cell === 0) {
-        ascii += '. ';
-      } else if (cell === 1) {
-        ascii += '● ';
-      } else if (cell === 2) {
-        ascii += '○ ';
-      }
-    }
-
-    ascii += '\n';
-  }
-
-  return ascii;
-}

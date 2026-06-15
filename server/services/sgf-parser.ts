@@ -3,6 +3,7 @@
  * Implements FF[4] specification
  * Reference: https://www.red-bean.com/sgf/
  */
+import { computeBoardState } from "@shared/go-board";
 
 export interface SGFMetadata {
   playerBlack?: string;
@@ -228,31 +229,11 @@ export function parseSGF(sgfContent: string): ParsedGame | null {
 }
 
 /**
- * Simulate board state after each move
- * Returns a 2D array representing the board (0=empty, 1=black, 2=white)
+ * Simulate board state after each move, applying capture rules so removed stones
+ * disappear from the position. Returns a 2D array (0=empty, 1=black, 2=white).
  */
 export function getBoardStateAfterMove(moves: Move[], upToMoveNumber: number): number[][] {
-  const board: number[][] = Array(19)
-    .fill(null)
-    .map(() => Array(19).fill(0));
-
-  for (let i = 0; i < Math.min(upToMoveNumber, moves.length); i++) {
-    const move = moves[i];
-
-    if (move.coordinate === 'pass') {
-      continue;
-    }
-
-    // Convert coordinate to array indices
-    const col = move.coordinate.charCodeAt(0) - 'A'.charCodeAt(0);
-    const row = 19 - parseInt(move.coordinate.slice(1), 10);
-
-    if (col >= 0 && col < 19 && row >= 0 && row < 19) {
-      board[row][col] = move.player === 'black' ? 1 : 2;
-    }
-  }
-
-  return board;
+  return computeBoardState(moves, upToMoveNumber);
 }
 
 /**
@@ -279,6 +260,32 @@ export function boardToASCII(board: number[][]): string {
   }
 
   ascii += '   A B C D E F G H J K L M N O P Q R S T\n';
+  return ascii;
+}
+
+/**
+ * Compact ASCII board representation used when sending positions to the LLM.
+ */
+export function boardToASCIICompact(board: number[][]): string {
+  let ascii = '  A B C D E F G H J K L M N O P Q R S T\n';
+
+  for (let row = 0; row < 19; row++) {
+    ascii += String(19 - row).padStart(2, ' ') + ' ';
+
+    for (let col = 0; col < 19; col++) {
+      const cell = board[row][col];
+      if (cell === 0) {
+        ascii += '. ';
+      } else if (cell === 1) {
+        ascii += '● ';
+      } else if (cell === 2) {
+        ascii += '○ ';
+      }
+    }
+
+    ascii += '\n';
+  }
+
   return ascii;
 }
 
