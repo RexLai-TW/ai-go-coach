@@ -92,23 +92,30 @@ export default function Review() {
   };
 
   const handleAnalyzeFullGame = async () => {
-    if (!gameId) return;
+    if (!gameId || !game) return;
 
     try {
-      const totalMoves = game?.totalMoves || 0;
+      const totalMoves = game.totalMoves || 0;
       setFullGameProgress({ current: 0, total: totalMoves });
       
       // 開始分析
       await analyzeFullGameMutation.mutateAsync({ gameId });
-
-      // 分析完成後，輪詢進度直到完成
+      
+      // 立即開始輪詢進度
+      let pollCount = 0;
+      const maxPolls = 300; // 最多輪詢 5 分鐘（300 * 1000ms）
+      
       const pollInterval = setInterval(async () => {
+        pollCount++;
         try {
           const progressData = await (trpc.analysis.getFullGameProgress as any).query({ gameId });
           const analyzed = progressData.analyzedCount || 0;
+          
+          console.log(`Progress: ${analyzed}/${totalMoves}`);
           setFullGameProgress({ current: analyzed, total: totalMoves });
           
-          if (analyzed >= totalMoves) {
+          // 檢查是否分析完成
+          if (analyzed >= totalMoves || pollCount >= maxPolls) {
             clearInterval(pollInterval);
             // 分析完成，重新獲取所有複盤結果
             const utils = trpc.useUtils();
@@ -118,6 +125,7 @@ export default function Review() {
           }
         } catch (err) {
           console.error('Error polling progress:', err);
+          // 繼續輪詢，不要停止
         }
       }, 1000); // 每秒輪詢一次
     } catch (error) {
@@ -217,9 +225,9 @@ export default function Review() {
         </div>
 
         {/* Main content - Two column layout (80:20) */}
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
-          {/* Left: Board + AI Review Panel (4 columns = 80%) */}
-          <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-10 gap-6 mb-6">
+          {/* Left: Board (8 columns = 80%) */}
+          <div className="lg:col-span-8 flex flex-col gap-6">
             {/* Board */}
             <Card className="p-6">
               <div className="overflow-x-auto flex justify-center">
@@ -256,13 +264,16 @@ export default function Review() {
                 </div>
               </Card>
             )}
+          </div>
 
+          {/* Right: AI Review Panel (2 columns = 20%) */}
+          <div className="lg:col-span-2 flex flex-col gap-6">
             {/* Full Game Review Results Summary */}
             {allReviewsQuery.data && allReviewsQuery.data.length > 0 && !fullGameProgress && (
               <Card className="p-4 bg-green-50 border border-green-200">
                 <div className="space-y-2">
                   <h3 className="text-sm font-semibold text-green-900">複盤統計</h3>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="grid grid-cols-1 gap-2 text-xs">
                     <div>
                       <p className="text-green-600 font-semibold">{allReviewsQuery.data.length}</p>
                       <p className="text-green-700">已分析手數</p>
@@ -295,10 +306,11 @@ export default function Review() {
               />
             </div>
           </div>
+        </div>
 
-          {/* Right: Chat Review (1 column = 20%) */}
-          <div className="lg:col-span-1">
-            <Card className="p-4 h-full flex flex-col sticky top-6">
+        {/* Chat Review - Full width below */}
+        <div className="grid grid-cols-1 gap-6">
+          <Card className="p-4 h-full flex flex-col">
               <ChatReviewBox
                 messages={chatHistoryQuery.data?.messages || []}
                 isLoading={sendMessageMutation.isPending}
@@ -308,7 +320,6 @@ export default function Review() {
                 totalMoves={game.totalMoves}
               />
             </Card>
-          </div>
         </div>
 
         {/* Game info */}
