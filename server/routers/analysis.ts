@@ -12,6 +12,7 @@ import {
   type ParsedGame,
 } from '../services/sgf-parser';
 import { invokeLLM } from '../_core/llm';
+import { getUserLLMConfig, type ResolvedLLMConfig } from '../services/llm-config';
 import { MOVE_EVALUATIONS } from '@shared/const';
 
 /**
@@ -81,7 +82,8 @@ async function analyzeMoveAt(
   parsed: ParsedGame,
   gameId: number,
   userId: number,
-  moveNumber: number
+  moveNumber: number,
+  llm: ResolvedLLMConfig
 ): Promise<MoveAnalysis> {
   const move = parsed.moves[moveNumber - 1];
   const board = getBoardStateAfterMove(parsed.moves, moveNumber);
@@ -89,12 +91,16 @@ async function analyzeMoveAt(
   const phase = getGamePhase(moveNumber, parsed.totalMoves);
   const boardAscii = boardToASCIICompact(board);
 
-  const response = await invokeLLM({
-    messages: [
-      { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
-      { role: 'user', content: buildUserPrompt({ moveNumber, move, lastMoves, phase, boardAscii }) },
-    ],
-  });
+  const response = await invokeLLM(
+    {
+      messages: [
+        { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
+        { role: 'user', content: buildUserPrompt({ moveNumber, move, lastMoves, phase, boardAscii }) },
+      ],
+      model: llm.model,
+    },
+    llm.overrides
+  );
 
   const messageContent = response.choices[0]?.message?.content;
   if (!messageContent || typeof messageContent !== 'string') {
@@ -159,7 +165,8 @@ export const analysisRouter = router({
       }
 
       try {
-        return await analyzeMoveAt(parsed, input.gameId, ctx.user!.id, input.moveNumber);
+        const llm = await getUserLLMConfig(ctx.user!.id);
+        return await analyzeMoveAt(parsed, input.gameId, ctx.user!.id, input.moveNumber, llm);
       } catch (error) {
         console.error('[Analysis] Error analyzing move:', error);
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to analyze move' });
@@ -211,12 +218,13 @@ export const analysisRouter = router({
       // Analyze at most 5 new moves per request to stay under the timeout limit.
       const batchSize = 5;
       let newReviewsCount = 0;
+      const llm = await getUserLLMConfig(ctx.user!.id);
 
       for (let i = 1; i <= parsed.moves.length && newReviewsCount < batchSize; i++) {
         if (reviewedMoves.has(i)) continue;
 
         try {
-          await analyzeMoveAt(parsed, input.gameId, ctx.user!.id, i);
+          await analyzeMoveAt(parsed, input.gameId, ctx.user!.id, i, llm);
           newReviewsCount++;
         } catch (error) {
           console.error(`[Analysis] Error analyzing move ${i}:`, error);

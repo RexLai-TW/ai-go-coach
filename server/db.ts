@@ -271,6 +271,29 @@ export async function addChatMessage(sessionId: number, role: 'user' | 'assistan
   }).where(eq(chatSessions.id, sessionId));
 }
 
+export async function appendChatMessages(
+  sessionId: number,
+  newMessages: Array<{ role: 'user' | 'assistant'; content: string }>
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const session = await db.select().from(chatSessions).where(
+    eq(chatSessions.id, sessionId)
+  ).limit(1);
+
+  if (!session[0]) throw new Error("Session not found");
+
+  const currentMessages = session[0].messages;
+  const messages = (Array.isArray(currentMessages) ? currentMessages : []) as Array<Record<string, unknown>>;
+  const timestamp = new Date().toISOString();
+  for (const msg of newMessages) {
+    messages.push({ role: msg.role, content: msg.content, timestamp });
+  }
+
+  await db.update(chatSessions).set({ messages }).where(eq(chatSessions.id, sessionId));
+}
+
 export async function getChatMessages(sessionId: number) {
   const db = await getDb();
   if (!db) return [];

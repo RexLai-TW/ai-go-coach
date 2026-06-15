@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { protectedProcedure, router } from '../_core/trpc';
-import { createChatSession, getChatSession, addChatMessage, getChatMessages, getGameById, updateChatSession } from '../db';
+import { createChatSession, getChatSession, appendChatMessages, getChatMessages, getGameById, updateChatSession } from '../db';
 import { parseSGF, getBoardStateAfterMove, getGamePhase, boardToASCIICompact } from '../services/sgf-parser';
 import { invokeLLM } from '../_core/llm';
+import { getUserLLMConfig } from '../services/llm-config';
 
 /**
  * Chat Review router: Handle conversational AI analysis
@@ -100,15 +101,18 @@ ${input.message}`;
       });
 
       try {
-        // Call LLM
-        const response = await invokeLLM({ messages });
+        // Call LLM using the user's configured provider when available.
+        const llm = await getUserLLMConfig(ctx.user!.id);
+        const response = await invokeLLM({ messages, model: llm.model }, llm.overrides);
 
         const content = response.choices[0]?.message?.content;
         const aiResponse = typeof content === 'string' ? content : 'Unable to generate response';
 
-        // Save messages to database
-        await addChatMessage(sessionId, 'user', input.message);
-        await addChatMessage(sessionId, 'assistant', aiResponse);
+        // Persist both turns in a single write so the pair can't be split.
+        await appendChatMessages(sessionId, [
+          { role: 'user', content: input.message },
+          { role: 'assistant', content: aiResponse },
+        ]);
 
         return {
           sessionId,
